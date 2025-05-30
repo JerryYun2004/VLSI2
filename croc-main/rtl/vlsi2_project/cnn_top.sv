@@ -82,7 +82,7 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
         end
     end
 
-    // Accelerator computation dummy control (to be expanded)
+    // Accelerator control FSM
     typedef enum logic [1:0] {IDLE, LOAD, COMPUTE, WRITE} state_t;
     state_t state, next_state;
 
@@ -102,4 +102,76 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
     end
 
     assign done = (state == WRITE);
+
+    // Instantiate datapath modules
+    logic [DATA_WIDTH-1:0] pixel_in;
+    logic valid_in;
+    logic [DATA_WIDTH-1:0] window[0:8];
+    logic signed [31:0] conv_out, relu_out;
+
+    line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
+        .clk(clk_i),
+        .rst_n(rst_ni),
+        .pixel_in(pixel_in),
+        .valid_in(valid_in),
+        .window(window)
+    );
+
+    conv #(.DATA_WIDTH(DATA_WIDTH), .ACC_WIDTH(32)) u_conv (
+        .window(window),
+        .weight(weights),
+        .conv_out(conv_out)
+    );
+
+    relu #(.DATA_WIDTH(32)) u_relu (
+        .in(conv_out),
+        .out(relu_out)
+    );
+
+    max_pool #(.DATA_WIDTH(32)) u_max_pool (
+        .in(relu_out),
+        .out()
+    );
+
+endmodule
+
+// RELU module
+module relu #(parameter DATA_WIDTH = 32) (
+    input  logic signed [DATA_WIDTH-1:0] in,
+    output logic signed [DATA_WIDTH-1:0] out
+);
+    assign out = (in[DATA_WIDTH-1]) ? '0 : in;
+endmodule
+
+// CONV module
+module conv #(parameter DATA_WIDTH = 8, ACC_WIDTH = 32) (
+    input  logic signed [DATA_WIDTH-1:0] window[0:8],
+    input  logic signed [DATA_WIDTH-1:0] weight[0:8],
+    output logic signed [ACC_WIDTH-1:0] conv_out
+);
+    always_comb begin
+        conv_out = 0;
+        for (int i = 0; i < 9; i++)
+            conv_out += window[i] * weight[i];
+    end
+endmodule
+
+// LINE BUFFER module
+module line_buffer #(parameter DATA_WIDTH = 8, parameter WIDTH = 28) (
+    input  logic clk,
+    input  logic rst_n,
+    input  logic [DATA_WIDTH-1:0] pixel_in,
+    input  logic valid_in,
+    output logic [DATA_WIDTH-1:0] window[0:8]
+);
+    // Implementation of line buffer omitted for brevity
+    // Connect shift registers to populate 3x3 window from 1D input stream
+endmodule
+
+// MAX POOL module (optional - placeholder)
+module max_pool #(parameter DATA_WIDTH = 32) (
+    input  logic signed [DATA_WIDTH-1:0] in,
+    output logic signed [DATA_WIDTH-1:0] out
+);
+    assign out = in; // Placeholder - replace with real pooling logic
 endmodule
