@@ -5,6 +5,9 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
+    logic                        relu_valid_in, relu_ready_in;
+    logic signed [31:0]          relu_out_data;
+    logic                        relu_valid_out, relu_ready_out;
 
     // OBI slave interface
     OBI_BUS.Subordinate cnn_if,
@@ -95,14 +98,15 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
     always_comb begin
         next_state = state;
         case (state)
-            IDLE:    if (start_reg) next_state = LOAD;
-            LOAD:    next_state = window_valid ? COMPUTE : LOAD;
-            COMPUTE: next_state = WRITE;
-            WRITE:   next_state = IDLE;
+            IDLE:    if (start_reg)         next_state = LOAD;
+            LOAD:    if (window_valid)      next_state = COMPUTE;
+            COMPUTE: if (relu_ready_in)     next_state = WRITE;  // Feed conv_out into ReLU
+            WRITE:   if (relu_valid_out)    next_state = IDLE;   // Wait until ReLU output is valid
         endcase
     end
 
-    assign done = (state == WRITE);
+    assign done = (state == WRITE && relu_valid_out);
+
 
     // Instantiate datapath modules
     logic [DATA_WIDTH-1:0] pixel_in;
@@ -127,15 +131,26 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
         .conv_out(conv_out)
     );
 
-    relu #(.DATA_WIDTH(32)) u_relu (
-        .in(conv_out),
-        .out(relu_out)
+    relu_streaming_ready_valid #(.DATA_WIDTH(32)) u_relu_stream (
+        .clk(clk_i),
+        .rst_n(rst_ni),
+        .in_data(conv_out),
+        .valid_in(relu_valid_in),
+        .ready_in(relu_ready_in),
+        .out_data(relu_out_data),
+        .valid_out(relu_valid_out),
+        .ready_out(relu_ready_out)
     );
 
+
     max_pool #(.DATA_WIDTH(32)) u_max_pool (
-        .pool_window(pool_data),
+        .pool_window('{relu_out_data, relu_out_data, relu_out_data, relu_out_data}), // placeholder
         .pool_out(pooled_out)
     );
+
+        // ReLU handshake wiring
+    assign relu_valid_in  = (state == COMPUTE);
+    assign relu_ready_out = (state == WRITE);  // Accept result only in WRITE state
 
 
 endmodule
