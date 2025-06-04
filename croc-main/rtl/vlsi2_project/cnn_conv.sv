@@ -6,7 +6,9 @@ module conv #(parameter DATA_WIDTH = 8, ACC_WIDTH = 32) (
 );
 
     always_comb begin
-        conv_out = 0;
+        conv_out = '0;
+    
+        (* unroll *)  // Hint for the synthesizer to unroll this loop
         for (int i = 0; i < 9; i++) begin
             conv_out += window[i] * weight[i];
         end
