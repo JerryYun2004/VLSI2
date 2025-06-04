@@ -133,8 +133,9 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
     );
 
     max_pool #(.DATA_WIDTH(32)) u_max_pool (
-        .in(relu_out),
-        .out()
+        .pool_window(pool_data),
+        .pool_out(pooled_out)
     );
+
 
 endmodule
