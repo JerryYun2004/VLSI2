@@ -5,7 +5,7 @@ module line_buffer #(parameter DATA_WIDTH = 8, WIDTH = 28) (
     input logic rst_n,
     input logic [DATA_WIDTH-1:0] pixel_in,
     input logic valid_in,
-    output logic [DATA_WIDTH-1:0] window[0:8] // 3x3 output
+    output logic [DATA_WIDTH-1:0] window[8:0] // 3x3 output
 );
 
     logic [DATA_WIDTH-1:0] row_buffer[0:2][0:WIDTH-1];
