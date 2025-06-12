@@ -29,6 +29,10 @@ module cnn_top #(
     logic start_reg;
     logic signed [DATA_WIDTH-1:0] weights[0:8];
 
+    logic                        relu_valid_in, relu_ready_in;
+    logic signed [31:0]          relu_out_data;
+    logic                        relu_valid_out, relu_ready_out;
+
     // OBI handshake state
     logic rvalid_q;
 
