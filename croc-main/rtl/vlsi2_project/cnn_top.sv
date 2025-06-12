@@ -1,28 +1,57 @@
 `include "obi/typedef.svh"
 `include "obi/assign.svh"
 
-module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
+module cnn_top #(
+    parameter DATA_WIDTH = 8, ADDR_WIDTH = 32,
+    parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
+    parameter type obi_req_t = logic,
+    parameter type obi_rsp_t = logic
+) (
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
-    logic                        relu_valid_in, relu_ready_in;
-    logic signed [31:0]          relu_out_data;
-    logic                        relu_valid_out, relu_ready_out;
-
-    // OBI slave interface
-    OBI_BUS.Subordinate cnn_if,
-
+    input  obi_req_t obi_req_i,
+    output obi_rsp_t obi_rsp_o,
     output logic done
 );
 
-    // OBI typedefs
-    `OBI_TYPEDEF_ALL(cnn_obi, obi_pkg::ObiDefaultConfig)
-    cnn_obi_req_t cnn_req;
-    cnn_obi_rsp_t cnn_rsp;
+    // Internal registers for OBI handshake
+    logic req_d, req_q;
+    logic we_d, we_q;
+    logic [ObiCfg.AddrWidth-1:0] addr_d, addr_q;
+    logic [ObiCfg.IdWidth-1:0] id_d, id_q;
+    logic [ObiCfg.DataWidth-1:0] wdata_d, wdata_q;
+    logic [ObiCfg.DataWidth-1:0] rsp_data;
+    logic rsp_err;
 
-    // Assign OBI interface
-    `OBI_ASSIGN_TO_REQ(cnn_req, cnn_if, obi_pkg::ObiDefaultConfig)
-    `OBI_ASSIGN_FROM_RSP(cnn_if, cnn_rsp, obi_pkg::ObiDefaultConfig)
+    // Accelerator registers
+    logic [ADDR_WIDTH-1:0] input_base, output_base;
+    logic start_reg;
+    logic signed [DATA_WIDTH-1:0] weights[0:8];
+
+    // OBI handshake state
+    logic rvalid_q;
+
+    // Latch OBI request fields
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            req_q   <= '0;
+            we_q    <= '0;
+            addr_q  <= '0;
+            id_q    <= '0;
+            wdata_q <= '0;
+            input_base   <= 0;
+            output_base  <= 0;
+            start_reg    <= 0;
+            for (int i = 0; i < 9; i++) weights[i] <= 0;
+        end else begin
+            req_q   <= obi_req_i.req;
+            we_q    <= obi_req_i.a.we;
+            addr_q  <= obi_req_i.a.addr;
+            id_q    <= obi_req_i.a.aid;
+            wdata_q <= obi_req_i.a.wdata;
+        end
+    end
 
     // Register map
     localparam ADDR_START       = 32'h00;
@@ -32,57 +61,48 @@ module cnn_top #(parameter DATA_WIDTH = 8, ADDR_WIDTH = 32) (
     localparam ADDR_WEIGHT0     = 32'h10;
     localparam ADDR_WEIGHT8     = 32'h30;
 
-    logic [ADDR_WIDTH-1:0] input_base, output_base;
-    logic start_reg;
-    logic signed [DATA_WIDTH-1:0] weights[0:8];
-
-    // OBI handshake state
-    logic rvalid_q;
-    logic [31:0] rdata_q;
-
-    assign cnn_rsp.rvalid = rvalid_q;
-    assign cnn_rsp.rdata  = rdata_q;
-
-    // Register access via OBI
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
-            input_base   <= 0;
-            output_base  <= 0;
-            start_reg    <= 0;
-            for (int i = 0; i < 9; i++) weights[i] <= 0;
-            rvalid_q     <= 1'b0;
-            rdata_q      <= 32'b0;
-        end else begin
-            rvalid_q <= 1'b0;
-            if (cnn_req.req && cnn_req.we) begin
-                unique case (cnn_req.a)
-                    ADDR_START:       start_reg <= 1'b1;
-                    ADDR_INPUT_BASE: input_base <= cnn_req.wdata;
-                    ADDR_OUTPUT_BASE: output_base <= cnn_req.wdata;
+    // Register access and response logic
+    always_comb begin
+        rsp_data = '0;
+        rsp_err  = 1'b0;
+        rvalid_q = 1'b0;
+        if (req_q) begin
+            if (we_q) begin
+                unique case (addr_q)
+                    ADDR_START:       start_reg = 1'b1;
+                    ADDR_INPUT_BASE:  input_base = wdata_q;
+                    ADDR_OUTPUT_BASE: output_base = wdata_q;
                     default: begin
-                        if (cnn_req.a >= ADDR_WEIGHT0 && cnn_req.a <= ADDR_WEIGHT8)
-                            weights[(cnn_req.a - ADDR_WEIGHT0) >> 2] <= cnn_req.wdata[DATA_WIDTH-1:0];
-                    end
-                endcase
-            end else if (cnn_req.req && !cnn_req.we) begin
-                rvalid_q <= 1'b1;
-                unique case (cnn_req.a)
-                    ADDR_DONE:        rdata_q <= done;
-                    ADDR_INPUT_BASE:  rdata_q <= input_base;
-                    ADDR_OUTPUT_BASE: rdata_q <= output_base;
-                    default: begin
-                        if (cnn_req.a >= ADDR_WEIGHT0 && cnn_req.a <= ADDR_WEIGHT8)
-                            rdata_q <= weights[(cnn_req.a - ADDR_WEIGHT0) >> 2];
+                        if (addr_q >= ADDR_WEIGHT0 && addr_q <= ADDR_WEIGHT8)
+                            weights[(addr_q - ADDR_WEIGHT0) >> 2] = wdata_q[DATA_WIDTH-1:0];
                         else
-                            rdata_q <= 32'hDEAD_BEEF;
+                            rsp_err = 1'b1;
                     end
                 endcase
-            end
-            if (!cnn_req.req) begin
-                start_reg <= 0;
+            end else begin
+                rvalid_q = 1'b1;
+                unique case (addr_q)
+                    ADDR_DONE:        rsp_data = done;
+                    ADDR_INPUT_BASE:  rsp_data = input_base;
+                    ADDR_OUTPUT_BASE: rsp_data = output_base;
+                    default: begin
+                        if (addr_q >= ADDR_WEIGHT0 && addr_q <= ADDR_WEIGHT8)
+                            rsp_data = weights[(addr_q - ADDR_WEIGHT0) >> 2];
+                        else
+                            rsp_data = 32'hDEAD_BEEF;
+                    end
+                endcase
             end
         end
     end
+
+    // OBI response assignments
+    assign obi_rsp_o.gnt = obi_req_i.req;
+    assign obi_rsp_o.rvalid = rvalid_q;
+    assign obi_rsp_o.r.rdata = rsp_data;
+    assign obi_rsp_o.r.rid = id_q;
+    assign obi_rsp_o.r.err = rsp_err;
+    assign obi_rsp_o.r.r_optional = '0;
 
     // Accelerator control FSM
     typedef enum logic [1:0] {IDLE, LOAD, COMPUTE, WRITE} state_t;
