@@ -79,14 +79,10 @@ module cnn_top_tb;
         testmode = 0;
         obi_req = '0;
         #20 rst_n = 1;
-
-        // INSERT AUTO-GENERATED IMAGE + LABEL DATA HERE
-        // Example:
-        // if (i == 0) begin
-        //     mem[INPUT_BASE + 0] = 8'd...
-        //     ...
-        //     golden_labels[0] = 8'd3;
-        // end
+        
+        // Load MNIST input images and labels
+        $readmemh("input_image.mem", mem, INPUT_BASE);
+        $readmemh("labels.mem", golden_labels);
 
         for (i = 0; i < MAX_TESTS; i++) begin
 
