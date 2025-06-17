@@ -21,6 +21,10 @@ module cnn_top #(
     output logic                  user_mem_write_en
 );
 
+    // Memory-mapped default patch for Croc compatibility
+    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
+    localparam logic [ADDR_WIDTH-1:0] DEFAULT_OUTPUT_BASE = 32'h1A10_0010;
+
     // Internal registers for OBI handshake
     logic req_d, req_q;
     logic we_d, we_q;
@@ -62,8 +66,8 @@ module cnn_top #(
             addr_q  <= '0;
             id_q    <= '0;
             wdata_q <= '0;
-            input_base   <= 0;
-            output_base  <= 0;
+            input_base   <= DEFAULT_INPUT_BASE;
+            output_base  <= DEFAULT_OUTPUT_BASE;
             start_reg    <= 0;
         end else begin
             req_q   <= obi_req_i.req;
