@@ -12,7 +12,13 @@ module cnn_top #(
     input  logic testmode_i,
     input  obi_req_t obi_req_i,
     output obi_rsp_t obi_rsp_o,
-    output logic done
+    output logic done,
+
+    input  logic [DATA_WIDTH-1:0] user_mem_data_in,
+    output logic [ADDR_WIDTH-1:0] user_mem_addr,
+    output logic                  user_mem_read_en,
+    output logic [DATA_WIDTH-1:0] user_mem_data_out,
+    output logic                  user_mem_write_en
 );
 
     // Internal registers for OBI handshake
@@ -27,7 +33,7 @@ module cnn_top #(
     // Accelerator registers
     logic [ADDR_WIDTH-1:0] input_base, output_base;
     logic start_reg;
-    logic signed [DATA_WIDTH-1:0] weights[0:8];
+    logic signed [DATA_WIDTH-1:0] weights[0:8] = '{17, 89, 39, 100, 70, 78, 11, 74, 52};
 
     // OBI handshake state
     logic rvalid_q;
@@ -43,6 +49,11 @@ module cnn_top #(
     logic relu_valid_out, relu_ready_out;
     logic signed [31:0] pooled_out;
 
+    // Memory interface counters
+    logic [ADDR_WIDTH-1:0] read_addr;
+    logic [ADDR_WIDTH-1:0] write_addr;
+    logic reading, writing;
+
     // Latch OBI request fields
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -54,7 +65,6 @@ module cnn_top #(
             input_base   <= 0;
             output_base  <= 0;
             start_reg    <= 0;
-            for (int i = 0; i < 9; i++) weights[i] <= 0;
         end else begin
             req_q   <= obi_req_i.req;
             we_q    <= obi_req_i.a.we;
@@ -69,8 +79,6 @@ module cnn_top #(
     localparam ADDR_STATUS      = 32'h04;
     localparam ADDR_INPUT_BASE  = 32'h08;
     localparam ADDR_OUTPUT_BASE = 32'h0C;
-    localparam ADDR_WEIGHT0     = 32'h10;
-    localparam ADDR_WEIGHT8     = 32'h30;
 
     logic status_reg;
 
@@ -85,12 +93,7 @@ module cnn_top #(
                     ADDR_CTRL:        start_reg = 1'b1;
                     ADDR_INPUT_BASE:  input_base = wdata_q;
                     ADDR_OUTPUT_BASE: output_base = wdata_q;
-                    default: begin
-                        if (addr_q >= ADDR_WEIGHT0 && addr_q <= ADDR_WEIGHT8)
-                            weights[(addr_q - ADDR_WEIGHT0) >> 2] = wdata_q[DATA_WIDTH-1:0];
-                        else
-                            rsp_err = 1'b1;
-                    end
+                    default:          rsp_err = 1'b1;
                 endcase
             end else begin
                 rvalid_q = 1'b1;
@@ -98,12 +101,7 @@ module cnn_top #(
                     ADDR_STATUS:      rsp_data = status_reg;
                     ADDR_INPUT_BASE:  rsp_data = input_base;
                     ADDR_OUTPUT_BASE: rsp_data = output_base;
-                    default: begin
-                        if (addr_q >= ADDR_WEIGHT0 && addr_q <= ADDR_WEIGHT8)
-                            rsp_data = weights[(addr_q - ADDR_WEIGHT0) >> 2];
-                        else
-                            rsp_data = 32'hDEAD_BEEF;
-                    end
+                    default:          rsp_data = 32'hDEAD_BEEF;
                 endcase
             end
         end
@@ -149,16 +147,62 @@ module cnn_top #(
         .pool_out(pooled_out)
     );
 
-    // Control signal flow for placeholder logic
     assign relu_valid_in  = window_valid;
-    assign relu_ready_out = 1'b1; // always ready
-    assign relu_ready_in  = 1'b1; // always ready
+    assign relu_ready_out = 1'b1;
+    assign relu_ready_in  = 1'b1;
+
+    // FSM for memory interaction
+    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
+    state_t state, next_state;
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            state <= IDLE;
+            read_addr <= 0;
+            write_addr <= 0;
+        end else begin
+            state <= next_state;
+            if (state == IDLE && start_reg) begin
+                read_addr <= input_base;
+                write_addr <= output_base;
+            end
+        end
+    end
+
+    always_comb begin
+        next_state = state;
+        valid_in = 0;
+        user_mem_read_en = 0;
+        user_mem_write_en = 0;
+        user_mem_addr = 0;
+        pixel_in = 0;
+        user_mem_data_out = pooled_out[DATA_WIDTH-1:0];
+
+        case (state)
+            IDLE: if (start_reg) next_state = READ;
+            READ: begin
+                user_mem_addr = read_addr;
+                user_mem_read_en = 1;
+                pixel_in = user_mem_data_in;
+                valid_in = 1;
+                next_state = PROCESS;
+            end
+            PROCESS: if (relu_valid_out) next_state = WRITE;
+            WRITE: begin
+                user_mem_addr = write_addr;
+                user_mem_write_en = 1;
+                next_state = IDLE;
+            end
+        endcase
+    end
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             status_reg <= 1'b0;
-        end else if (start_reg) begin
+        end else if (state == WRITE) begin
             status_reg <= 1'b1;
+        end else if (state == IDLE) begin
+            status_reg <= 1'b0;
         end
     end
 
