@@ -1,62 +1,127 @@
+// Simple testbench for cnn_top
+`timescale 1ns/1ps
 module cnn_top_tb;
-    import obi_pkg::*;
-    import cnn_pkg::*;  // Define CNN config if needed
 
+    // Parameters
+    localparam DATA_WIDTH = 8;
+    localparam ADDR_WIDTH = 32;
+    localparam MEM_DEPTH  = 64;
+
+    // DUT Inputs
     logic clk;
     logic rst_n;
+    logic testmode;
+    logic [DATA_WIDTH-1:0] mem [0:MEM_DEPTH-1];
+    logic [DATA_WIDTH-1:0] mem_out_data;
 
-    logic relu_valid_out, relu_ready_out;
-    logic relu_valid_in, relu_ready_in;
-    logic signed [31:0] relu_out_data;
+    // OBI simplified
+    typedef struct packed {
+        logic                 req;
+        struct packed {
+            logic             we;
+            logic [ADDR_WIDTH-1:0] addr;
+            logic [DATA_WIDTH-1:0] wdata;
+            logic [3:0]       aid;
+        } a;
+    } obi_req_t;
+
+    typedef struct packed {
+        logic                 gnt;
+        logic                 rvalid;
+        struct packed {
+            logic [DATA_WIDTH-1:0] rdata;
+            logic [3:0]            rid;
+            logic                  err;
+            logic [1:0]            r_optional;
+        } r;
+    } obi_rsp_t;
+
+    obi_req_t obi_req;
+    obi_rsp_t obi_rsp;
+
+    // Memory interface wires
+    logic [ADDR_WIDTH-1:0] user_addr;
+    logic [DATA_WIDTH-1:0] user_data_out;
+    logic [DATA_WIDTH-1:0] user_data_in;
+    logic user_rd_en, user_wr_en;
     logic done;
 
-    // Clock generation
-    always #5 clk = ~clk;
-
     // Instantiate DUT
-    OBI_BUS cnn_bus();
-
-    cnn_top uut (
+    cnn_top #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .ADDR_WIDTH(ADDR_WIDTH)
+    ) dut (
         .clk_i(clk),
         .rst_ni(rst_n),
-        .testmode_i(1'b0),
-        .relu_valid_in(relu_valid_in),
-        .relu_ready_in(relu_ready_in),
-        .relu_out_data(relu_out_data),
-        .relu_valid_out(relu_valid_out),
-        .relu_ready_out(relu_ready_out),
-        .cnn_if(cnn_bus),
-        .done(done)
+        .testmode_i(testmode),
+        .obi_req_i(obi_req),
+        .obi_rsp_o(obi_rsp),
+        .done(done),
+        .user_mem_data_in(user_data_in),
+        .user_mem_data_out(user_data_out),
+        .user_mem_addr(user_addr),
+        .user_mem_read_en(user_rd_en),
+        .user_mem_write_en(user_wr_en)
     );
 
-    // Stimulus: OBI master to write weights/input base/output base/start
-    task write_reg(input [31:0] addr, input [31:0] data);
-        cnn_bus.req   = 1'b1;
-        cnn_bus.we    = 1'b1;
-        cnn_bus.a     = addr;
-        cnn_bus.wdata = data;
-        @(posedge clk); // Wait 1 cycle
-        cnn_bus.req = 1'b0;
-    endtask
+    // Clock
+    initial clk = 0;
+    always #5 clk = ~clk;
 
-    task read_reg(input [31:0] addr, output [31:0] data);
-        cnn_bus.req = 1'b1;
-        cnn_bus.we  = 1'b0;
-        cnn_bus.a   = addr;
-        @(posedge clk);
-        while (!cnn_bus.rvalid) @(posedge clk);
-        data = cnn_bus.rdata;
-        cnn_bus.req = 1'b0;
-    endtask
+    // Memory behavior
+    always_ff @(posedge clk) begin
+        if (user_rd_en)
+            user_data_in <= mem[user_addr];
+        if (user_wr_en)
+            mem[user_addr] <= user_data_out;
+    end
 
-    // Add tasks to load input pixels, weights, and observe output
-
+    // Stimulus
     initial begin
-        clk = 0;
         rst_n = 0;
+        testmode = 0;
+        obi_req = '0;
         #20 rst_n = 1;
 
-        // Initialize inputs, weights
-        // Wait for done = 1
+        // Input image 3x3 (flattened)
+        mem[32'h1000_0000] = 10;
+        mem[32'h1000_0001] = 20;
+        mem[32'h1000_0002] = 30;
+        mem[32'h1000_0003] = 40;
+        mem[32'h1000_0004] = 50;
+        mem[32'h1000_0005] = 60;
+        mem[32'h1000_0006] = 70;
+        mem[32'h1000_0007] = 80;
+        mem[32'h1000_0008] = 90;
+
+        #10;
+        // Write INPUT_BASE
+        obi_req.a.addr = 32'h08;
+        obi_req.a.wdata = 32'h1000_0000;
+        obi_req.a.we = 1;
+        obi_req.req = 1;
+        #10 obi_req.req = 0;
+
+        // Write OUTPUT_BASE
+        obi_req.a.addr = 32'h0C;
+        obi_req.a.wdata = 32'h1000_0010;
+        obi_req.a.we = 1;
+        obi_req.req = 1;
+        #10 obi_req.req = 0;
+
+        // Write CTRL to start
+        obi_req.a.addr = 32'h00;
+        obi_req.a.wdata = 32'h1;
+        obi_req.a.we = 1;
+        obi_req.req = 1;
+        #10 obi_req.req = 0;
+
+        // Wait for done
+        wait (done == 1);
+        #20;
+
+        $display("CNN done. Output at 0x10000010 = %0d", mem[32'h1000_0010]);
+        $finish;
     end
+
 endmodule
