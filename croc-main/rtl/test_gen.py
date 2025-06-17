@@ -1,19 +1,20 @@
 import numpy as np
 from tensorflow.keras.datasets import mnist
 
-# Load MNIST test images
+# Load MNIST data
 (_, _), (x_test, y_test) = mnist.load_data()
 
-# Select an index (e.g., a '7' at index 13)
-idx = 13
-img = x_test[idx]  # shape (28, 28)
-label = y_test[idx]
-print(f"Selected digit: {label}")
+MAX_TESTS = 100
+images = x_test[:MAX_TESTS].reshape(MAX_TESTS, -1)  # shape (100, 784)
+labels = y_test[:MAX_TESTS]                         # shape (100,)
 
-# Flatten to 1D
-pixels = img.flatten()  # length 784
+# Save 78400 pixel values into input_image.mem
+with open("input_image.mem", "w") as f:
+    for image in images:
+        for px in image:
+            f.write(f"{px:02x}\n")  # hex format, 2-digit
 
-# Generate SystemVerilog mem[...] assignments
-base = 0x1A10_0000
-for i, val in enumerate(pixels):
-    print(f"mem[INPUT_BASE + {i}] = {val};")
+# Save 100 labels into labels.mem
+with open("labels.mem", "w") as f:
+    for label in labels:
+        f.write(f"{label:01x}\n")  # hex format, 1-digit
