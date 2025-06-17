@@ -7,6 +7,9 @@ module cnn_top_tb;
     localparam ADDR_WIDTH = 32;
     localparam MEM_DEPTH  = 64;
 
+    localparam INPUT_BASE  = 32'h1A10_0000;
+    localparam OUTPUT_BASE = 32'h1A10_0010;
+
     // DUT Inputs
     logic clk;
     logic rst_n;
@@ -83,44 +86,44 @@ module cnn_top_tb;
         obi_req = '0;
         #20 rst_n = 1;
 
-        // Input image 3x3 (flattened)
-        mem[32'h1000_0000] = 10;
-        mem[32'h1000_0001] = 20;
-        mem[32'h1000_0002] = 30;
-        mem[32'h1000_0003] = 40;
-        mem[32'h1000_0004] = 50;
-        mem[32'h1000_0005] = 60;
-        mem[32'h1000_0006] = 70;
-        mem[32'h1000_0007] = 80;
-        mem[32'h1000_0008] = 90;
+        // Store the input image (3x3) at valid address space
+        mem[INPUT_BASE + 0] = 10;
+        mem[INPUT_BASE + 1] = 20;
+        mem[INPUT_BASE + 2] = 30;
+        mem[INPUT_BASE + 3] = 40;
+        mem[INPUT_BASE + 4] = 50;
+        mem[INPUT_BASE + 5] = 60;
+        mem[INPUT_BASE + 6] = 70;
+        mem[INPUT_BASE + 7] = 80;
+        mem[INPUT_BASE + 8] = 90;
 
         #10;
         // Write INPUT_BASE
-        obi_req.a.addr = 32'h08;
-        obi_req.a.wdata = 32'h1000_0000;
-        obi_req.a.we = 1;
-        obi_req.req = 1;
+        obi_req.a.addr  = 32'h08;
+        obi_req.a.wdata = INPUT_BASE;
+        obi_req.a.we    = 1;
+        obi_req.req     = 1;
         #10 obi_req.req = 0;
 
         // Write OUTPUT_BASE
-        obi_req.a.addr = 32'h0C;
-        obi_req.a.wdata = 32'h1000_0010;
-        obi_req.a.we = 1;
-        obi_req.req = 1;
+        obi_req.a.addr  = 32'h0C;
+        obi_req.a.wdata = OUTPUT_BASE;
+        obi_req.a.we    = 1;
+        obi_req.req     = 1;
         #10 obi_req.req = 0;
 
         // Write CTRL to start
-        obi_req.a.addr = 32'h00;
+        obi_req.a.addr  = 32'h00;
         obi_req.a.wdata = 32'h1;
-        obi_req.a.we = 1;
-        obi_req.req = 1;
+        obi_req.a.we    = 1;
+        obi_req.req     = 1;
         #10 obi_req.req = 0;
 
         // Wait for done
         wait (done == 1);
         #20;
 
-        $display("CNN done. Output at 0x10000010 = %0d", mem[32'h1000_0010]);
+        $display("CNN done. Output at 0x%08h = %0d", OUTPUT_BASE, mem[OUTPUT_BASE]);
         $finish;
     end
 
