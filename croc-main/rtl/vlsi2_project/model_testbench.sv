@@ -1,4 +1,4 @@
-// Auto-generated testbench for cnn_top
+// Auto-generated testbench for cnn_top with real MNIST label support
 `timescale 1ns/1ps
 module cnn_top_tb;
 
@@ -13,6 +13,7 @@ module cnn_top_tb;
     logic rst_n;
     logic testmode;
     logic [DATA_WIDTH-1:0] mem [0:65535];
+    logic [7:0] golden_labels [0:MAX_TESTS-1]; // true labels from MNIST
 
     typedef struct packed {
         logic req;
@@ -71,9 +72,7 @@ module cnn_top_tb;
             mem[user_addr] <= user_data_out;
     end
 
-    // Test loop logic
-    integer i, errors = 0;
-    logic [31:0] golden;
+    integer i, j, errors = 0;
 
     initial begin
         rst_n = 0;
@@ -81,11 +80,15 @@ module cnn_top_tb;
         obi_req = '0;
         #20 rst_n = 1;
 
+        // INSERT AUTO-GENERATED IMAGE + LABEL DATA HERE
+        // Example:
+        // if (i == 0) begin
+        //     mem[INPUT_BASE + 0] = 8'd...
+        //     ...
+        //     golden_labels[0] = 8'd3;
+        // end
+
         for (i = 0; i < MAX_TESTS; i++) begin
-            // Random test image input (for demo purpose)
-            foreach (mem[INPUT_BASE +: IMAGE_SIZE]) begin
-                mem[INPUT_BASE + i] = $urandom_range(0, 255);
-            end
 
             // Write INPUT_BASE
             obi_req.a.addr = 32'h08;
@@ -111,12 +114,8 @@ module cnn_top_tb;
             wait (done == 1);
             #10;
 
-            // Mock expected value: hardcoded for now
-            // expected digit label, placeholder for now (simulate random digit 0-9)
-            golden = $urandom_range(0, 9);
-
-            if (mem[OUTPUT_BASE] !== golden) begin
-                $display("[FAIL] Test %0d: Got %0d, expected %0d", i, mem[OUTPUT_BASE], golden);
+            if (mem[OUTPUT_BASE] !== golden_labels[i]) begin
+                $display("[FAIL] Test %0d: Got %0d, expected %0d", i, mem[OUTPUT_BASE], golden_labels[i]);
                 errors++;
             end else begin
                 $display("[PASS] Test %0d: Got %0d", i, mem[OUTPUT_BASE]);
