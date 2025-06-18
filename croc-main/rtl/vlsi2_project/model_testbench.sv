@@ -6,8 +6,8 @@ module cnn_top_tb;
     localparam ADDR_WIDTH = 32;
     localparam IMAGE_SIZE = 28 * 28;
     localparam MAX_TESTS  = 100;
-    localparam INPUT_BASE  = 32'h1A10_0000;
-    localparam OUTPUT_BASE = 32'h1A10_0400;
+    localparam INPUT_BASE  = 32'h2000_1000; // Start of UserCnnAddrOffset
+    localparam OUTPUT_BASE = 32'h2000_1400; // 1KB after input base, fits in 4KB range
 
     logic clk;
     logic rst_n;
