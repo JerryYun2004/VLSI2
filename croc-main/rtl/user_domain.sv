@@ -31,7 +31,7 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   /////////////////////
 
   // No manager so we don't need a obi_mux module and just terminate the request properly
-
+  assign user_mgr_obi_req_o = '0; // No manager request
 
   ////////////////////////////
   // User Subordinate DEMUX //
@@ -54,8 +54,6 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   sbr_obi_rsp_t user_error_obi_rsp;
 
   // CNN OBI manager and subordinate signals
-  mgr_obi_req_t cnn_mgr_obi_req;
-  mgr_obi_rsp_t cnn_mgr_obi_rsp;
   sbr_obi_req_t cnn_sbr_obi_req;
   sbr_obi_rsp_t cnn_sbr_obi_rsp;
 
@@ -65,10 +63,6 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
 
   assign user_rom_obi_req                = all_user_sbr_obi_req[UserRom];
   assign all_user_sbr_obi_rsp[UserRom]   = user_rom_obi_rsp;
-
-  // CNN Accelerator OBI manager interface
-  assign user_mgr_obi_req_o = cnn_mgr_obi_req;
-  assign cnn_mgr_obi_rsp    = user_mgr_obi_rsp_i;
 
   // CNN Accelerator OBI subordinate interface
   assign cnn_sbr_obi_req               = all_user_sbr_obi_req[UserCnn];
