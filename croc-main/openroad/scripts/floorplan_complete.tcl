@@ -1,0 +1,9 @@
+source scripts/init.tcl
+source scripts/init_tech.tcl
+read_verilog ../yosys/out/croc.v
+link_design croc_chip
+read_sdc src/constraints.sdc
+source scripts/init_floorplan.tcl
+source scripts/pin_placement.tcl
+source scripts/macro_placement.tcl
+source scripts/power_connect.tcl
