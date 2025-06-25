@@ -11,14 +11,22 @@ cd $klayout_dir
 ################
 ### project  ###
 ################
-topcell="croc_chip"
-defpath="$root_dir/openroad/out/croc.def"
+# topcell="croc_chip"
+# defpath="$root_dir/openroad/out/croc.def"
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $0 <topcell> <defpath>"
+    echo "Example: $0 croc_chip ../openroad/out/croc.def"
+    exit 1
+fi
+
+topcell="$1"
+defpath="$2"
 
 
 ################
 ## technology ##
 ################
-if [[ -f "$root_dir/cockpit.log" ]]; then
+if [[ -f "$root_dir/.cockpitrc" ]]; then
     echo "Init tech from ETHZ DZ cockpit"
     pdk_dir=$(realpath "$root_dir/technology")
     pdk_cells_lef_dir="${pdk_dir}/lef"
@@ -47,17 +55,20 @@ lef="$(find "$pdk_cells_lef_dir" -name 'sg13g2_stdcell.lef' -exec realpath {} \;
      $(find "$pdk_io_lef_dir" -name 'sg13g2_io.lef' -exec realpath {} \;) \
      $(find "$bondpad_lef_dir" -name '*.lef' -exec realpath {} \;)"
 
+echo "$lef"
+
 gds="$(find "$pdk_cells_gds_dir" -name 'sg13g2_stdcell.gds' -exec realpath {} \;) \
      $(find "$pdk_sram_gds_dir" -name 'RM_IHPSG13*.gds' -exec realpath {} \;) \
      $(find "$pdk_io_gds_dir" -name 'sg13g2_io.gds' -exec realpath {} \;) \
      $(find "$bondpad_gds_dir" -name '*.gds' -exec realpath {} \;)"
 
-tech="$root_dir/ihp13/pdk/ihp-sg13g2/libs.tech/klayout/tech/sg13g2.lyt"
-layer="$root_dir/ihp13/pdk/ihp-sg13g2/libs.tech/klayout/tech/sg13g2.lyp"
+tech="$root_dir/klayout/.klayout/tech/sg13g2.lyt"
+layer="$root_dir/klayout/.klayout/tech/sg13g2.lyp"
 
 # create klayout home dir and add pdk to path
 export KLAYOUT_HOME="$klayout_dir/.klayout"
-export KLAYOUT_PATH="$(realpath $root_dir/ihp13/pdk/ihp-sg13g2/libs.tech/klayout):$KLAYOUT_PATH"
+# export KLAYOUT_PATH="$(realpath $root_dir/ihp13/pdk/ihp-sg13g2/libs.tech/.klayout):$KLAYOUT_PATH"
+export KLAYOUT_PATH="$(realpath $root_dir/klayout/.klayout):$KLAYOUT_PATH"
 mkdir -p $KLAYOUT_HOME/tech
 
 # all <lef-files> entries for the tech file
@@ -66,8 +77,22 @@ for lef_file in $lef; do
     lef_files+="<lef-files>$lef_file</lef-files>\n"
 done
 
-# replace the placeholder tag with the real lef files
-sed "/<lef-files><\/lef-files>/c $lef_files" "$tech" > $KLAYOUT_HOME/tech/sg13g2.lyt
+tmpfile=$(mktemp)
+# sed "/<lef-files>*<\/lef-files>/c\\ $lef_files" "$tech" > "$tmpfile"
+awk -v new_lef_files="$lef_files" '
+  BEGIN { in_lef_block = 0 }
+  /<lef-files>/,/<\/lef-files>/ {
+    if (!in_lef_block) {
+      print new_lef_files
+      in_lef_block = 1
+    }
+    next
+  }
+  { print }
+' "$tech" > "$tmpfile"
+
+mv "$tmpfile" "$tech"
+
 ln -sfr $klayout_dir/sg13g2.map $KLAYOUT_HOME/tech/sg13g2.map
 
 echo "$gds" > $KLAYOUT_HOME/tech/tech_gds.f
