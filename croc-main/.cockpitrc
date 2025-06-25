@@ -51,15 +51,21 @@
 
   libs    = SG13G2_1.3.1 \
             open_stdcell_v3.2 \
-            open_io_v0.1 \ 
-            open_sram_v2.1
+            open_sram_v2.1 \
+            open_io_v0.2 \
+            agingsensor_v1.2
 
 
   # send an e-mail to <dz@ethz.ch> to ask for macros. Currently available
   # macro datasheets are available under:
   #   /usr/pack/ihp-sg13-kgf/open_ihp_sg13g2/IHP-Open-PDK-main_v2.0/sg13g2_sram
   
-  macros  = RM_IHPSG13_1P_256x64_c2_bm_bist
+  macros  = RM_IHPSG13_1P_1024x64_c2_bm_bist \
+            RM_IHPSG13_1P_2048x64_c2_bm_bist \
+            RM_IHPSG13_1P_256x48_c2_bm_bist \
+            RM_IHPSG13_1P_256x64_c2_bm_bist \
+            RM_IHPSG13_1P_512x64_c2_bm_bist \
+            RM_IHPSG13_1P_64x64_c2_bm_bist
             
   
 [version]
