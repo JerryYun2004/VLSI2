@@ -72,6 +72,18 @@ module cnn_top_tb;
             mem[user_addr] <= user_data_out;
     end
 
+    task automatic obi_read(input logic [ADDR_WIDTH-1:0] addr, output logic [DATA_WIDTH-1:0] data);
+        begin
+            obi_req.a.addr = addr;
+            obi_req.a.we = 0;
+            obi_req.req = 1;
+            #10;
+            obi_req.req = 0;
+            wait (obi_rsp.rvalid);
+            data = obi_rsp.r.rdata;
+        end
+    endtask
+
     integer i, j, errors = 0;
 
     initial begin
