@@ -75,6 +75,9 @@ module cnn_top_tb;
     integer i, j, errors = 0;
 
     initial begin
+        $dumpfile("cnn_top.vcd");    // Name of VCD file
+        $dumpvars(0, cnn_top_tb);    // Dump all variables in the testbench
+        
         rst_n = 0;
         testmode = 0;
         obi_req = '0;
