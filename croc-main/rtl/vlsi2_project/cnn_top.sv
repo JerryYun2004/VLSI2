@@ -169,6 +169,7 @@ module cnn_top #(
             if (state == IDLE && start_reg) begin
                 read_addr <= input_base;
                 write_addr <= output_base;
+                start_reg <= 1'b0; // <-- Clear start_reg after use
             end
         end
     end
