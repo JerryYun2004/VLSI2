@@ -1,0 +1,39 @@
+#define CNN_BASE         0x1A104000
+#define CNN_CTRL         (CNN_BASE + 0x00)
+#define CNN_STATUS       (CNN_BASE + 0x04)
+#define CNN_INPUT_BASE   (CNN_BASE + 0x08)
+#define CNN_OUTPUT_BASE  (CNN_BASE + 0x0C)
+#define CNN_WEIGHT_BASE  (CNN_BASE + 0x10)
+
+#define SRAM_BASE        0x1C000000
+
+volatile uint32_t* cnn = (uint32_t*)CNN_BASE;
+
+void main() {
+    // Write weights
+    for (int i = 0; i < 9; i++)
+        *((volatile uint32_t*)(CNN_WEIGHT_BASE + 4*i)) = (int8_t)(i + 1); // example weights
+
+    // Write input image to SRAM
+    for (int i = 0; i < 784; i++)
+        *((volatile uint8_t*)(SRAM_BASE + i)) = i & 0xFF; // dummy input
+
+    // Set input/output base
+    *((volatile uint32_t*)CNN_INPUT_BASE) = SRAM_BASE;
+    *((volatile uint32_t*)CNN_OUTPUT_BASE) = SRAM_BASE + 0x400;
+
+    // Start CNN
+    *((volatile uint32_t*)CNN_CTRL) = 1;
+
+    // Wait for done
+    while (*((volatile uint32_t*)CNN_STATUS) == 0);
+
+    // Check output
+    for (int i = 0; i < 10; i++) {
+        int result = *((volatile uint8_t*)(SRAM_BASE + 0x400 + i));
+        // Optionally write result to UART or LED
+    }
+
+    // Set return code
+    *((volatile uint32_t*)0x1A106000) = 0x12345678; // SOC_CTRL_CORESTATUS to end sim
+}
