@@ -30,8 +30,11 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   // User Manager MUX //
   /////////////////////
 
-  // No manager so we don't need a obi_mux module and just terminate the request properly
-  assign user_mgr_obi_req_o = '0; // No manager request
+  // CNN is the only manager, hence no mux required
+  // will need to instantiate a obi_mux if more managers are involved later
+ 
+  assign user_mgr_obi_req_o = cnn_mgr_obi_req;
+  assign cnn_mgr_obi_rsp    = user_mgr_obi_rsp_i;
 
   ////////////////////////////
   // User Subordinate DEMUX //
