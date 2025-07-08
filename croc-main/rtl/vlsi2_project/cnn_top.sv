@@ -37,7 +37,7 @@ module cnn_top #(
     // Accelerator registers
     logic [ADDR_WIDTH-1:0] input_base, output_base;
     logic start_reg;
-    logic signed [DATA_WIDTH-1:0] weights[0:8] = '{17, 89, 39, 100, 70, 78, 11, 74, 52};
+    logic signed [DATA_WIDTH-1:0] weights_reg [0:8];
 
     // OBI handshake state
     logic rvalid_q;
@@ -79,34 +79,44 @@ module cnn_top #(
     end
 
     // Register map
-    localparam ADDR_CTRL        = 32'h00;
-    localparam ADDR_STATUS      = 32'h04;
-    localparam ADDR_INPUT_BASE  = 32'h08;
-    localparam ADDR_OUTPUT_BASE = 32'h0C;
-
-    logic status_reg;
+    localparam ADDR_CTRL         = 32'h00;
+    localparam ADDR_STATUS       = 32'h04;
+    localparam ADDR_INPUT_BASE   = 32'h08;
+    localparam ADDR_OUTPUT_BASE  = 32'h0C;
+    localparam ADDR_WEIGHT_BASE  = 32'h10; // Base address for weights[0] to weights[8]
 
     // Register access and response logic
     always_comb begin
         rsp_data = '0;
         rsp_err  = 1'b0;
         rvalid_q = 1'b0;
+
         if (req_q) begin
             if (we_q) begin
-                unique case (addr_q)
-                    ADDR_CTRL:        start_reg = 1'b1;
-                    ADDR_INPUT_BASE:  input_base = wdata_q;
-                    ADDR_OUTPUT_BASE: output_base = wdata_q;
-                    default:          rsp_err = 1'b1;
-                endcase
+                // Write path
+                if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
+                    weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
+                end else begin
+                    unique case (addr_q)
+                        ADDR_CTRL:         start_reg   = 1'b1;
+                        ADDR_INPUT_BASE:   input_base  = wdata_q;
+                        ADDR_OUTPUT_BASE:  output_base = wdata_q;
+                        default:           rsp_err     = 1'b1;
+                    endcase
+                end
             end else begin
+                // Read path
                 rvalid_q = 1'b1;
-                unique case (addr_q)
-                    ADDR_STATUS:      rsp_data = status_reg;
-                    ADDR_INPUT_BASE:  rsp_data = input_base;
-                    ADDR_OUTPUT_BASE: rsp_data = output_base;
-                    default:          rsp_data = 32'hDEAD_BEEF;
-                endcase
+                if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
+                    rsp_data = {{(32-DATA_WIDTH){1'b0}}, weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2]};
+                end else begin
+                    unique case (addr_q)
+                        ADDR_STATUS:       rsp_data = status_reg;
+                        ADDR_INPUT_BASE:   rsp_data = input_base;
+                        ADDR_OUTPUT_BASE:  rsp_data = output_base;
+                        default:           rsp_data = 32'hDEAD_BEEF;
+                    endcase
+                end
             end
         end
     end
@@ -131,9 +141,10 @@ module cnn_top #(
 
     conv #(.DATA_WIDTH(DATA_WIDTH), .ACC_WIDTH(32)) u_conv (
         .window(window),
-        .weight(weights),
+        .weight(weights_reg),
         .conv_out(conv_out)
     );
+
 
     relu_streaming_ready_valid #(.DATA_WIDTH(32)) u_relu (
         .clk(clk_i),
