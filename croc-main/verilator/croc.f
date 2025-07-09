@@ -290,7 +290,6 @@
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/gpio/gpio.sv
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/croc_domain.sv
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/user_domain/user_rom.sv
-/home/vlsi2_50fs25/VLSI2/croc-main/rtl/user_domain/user_setbitacc.sv
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/user_domain.sv
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/croc_soc.sv
 
