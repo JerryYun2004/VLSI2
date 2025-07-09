@@ -496,6 +496,33 @@ module tb_croc_soc #(
         $display("@%t | [CORE] Wait for end of code...", $time);
         jtag_wait_for_eoc(tb_data);
 
+        // === Load expected labels for comparison ===
+        string label_path = "labels.mem";
+        int label_file;
+        logic [3:0] expected_label;
+        
+        label_file = $fopen(label_path, "r");
+        if (label_file == 0) begin
+          $fatal(1, "Failed to open labels.mem!");
+        end
+        
+        // Read the first label (for now, one image)
+        if ($fscanf(label_file, "%1h\n", expected_label) != 1) begin
+          $fatal(1, "Invalid data in labels.mem");
+        end
+        $fclose(label_file);
+        
+        // === Extract predicted label from return code ===
+        logic [3:0] predicted_label;
+        predicted_label = tb_data[3:0];
+        
+        if (predicted_label === expected_label) begin
+          $display("@%t | [CHECK] ✅ Prediction correct: %0d == %0d", $time, predicted_label, expected_label);
+        end else begin
+          $display("@%t | [CHECK] ❌ Prediction wrong: got %0d, expected %0d", $time, predicted_label, expected_label);
+        end
+
+        
         // finish simulation
         repeat(50) @(posedge clk);
         `ifdef TRACE_WAVE
