@@ -53,7 +53,7 @@ module tb_croc_soc #(
     /////////////////////////////
     //  Command Line Arguments //
     /////////////////////////////
-    string binary_path;
+    string binary_path = "../sw/bin/c_tb.hex";
     initial begin
         if ($value$plusargs("binary=%s", binary_path)) begin
             $display("Running program: %s", binary_path);
@@ -462,7 +462,7 @@ module tb_croc_soc #(
         jtag_load_hex(binary_path);
 
         // Load input_image.mem (28x28 = 784 bytes) into SRAM at 0x1C000000
-        string input_image_path = "input_image.mem";
+        string input_image_path = "vlsi2_project/input_image.mem";
         int image_file;
         logic [7:0] pixel;
         int pixel_count;
@@ -497,7 +497,7 @@ module tb_croc_soc #(
         jtag_wait_for_eoc(tb_data);
 
         // === Load expected labels for comparison ===
-        string label_path = "labels.mem";
+        string label_path = "vlsi2_project/labels.mem";
         int label_file;
         logic [3:0] expected_label;
         
