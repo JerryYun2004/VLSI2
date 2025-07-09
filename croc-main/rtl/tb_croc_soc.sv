@@ -464,7 +464,7 @@ module tb_croc_soc #(
         // Load input_image.mem (28x28 = 784 bytes) into SRAM at 0x1C000000
         reg [1023:0] input_image_path = "vlsi2_project/input_image.mem";
         int image_file;
-        logic [7:0] pixel;
+        reg [7:0] pixel;
         int pixel_count;
         
         image_file = $fopen(input_image_path, "r");
