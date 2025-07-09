@@ -461,6 +461,28 @@ module tb_croc_soc #(
         // load binary to sram
         jtag_load_hex(binary_path);
 
+        // Load input_image.mem (28x28 = 784 bytes) into SRAM at 0x1C000000
+        string input_image_path = "input_image.mem";
+        int image_file;
+        logic [7:0] pixel;
+        int pixel_count;
+        
+        image_file = $fopen(input_image_path, "r");
+        if (image_file == 0) begin
+          $fatal(1, "Failed to open input_image.mem!");
+        end
+        
+        $display("@%t | [JTAG] Writing input image to SRAM", $time);
+        for (int i = 0; i < 784; i++) begin
+          if ($fscanf(image_file, "%2h\n", pixel) != 1) begin
+            $fatal(1, "Invalid data in input_image.mem at byte %0d", i);
+          end
+          jtag_write_reg32(32'h1C000000 + i, pixel, 0); // no check_write, just write 1 byte
+        end
+        
+        $fclose(image_file);
+
+        
         $display("@%t | [CORE] Start fetching instructions", $time);
         fetch_en_i = 1'b1;
 
