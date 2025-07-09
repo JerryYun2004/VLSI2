@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #define CNN_BASE         0x1A104000
 #define CNN_CTRL         (CNN_BASE + 0x00)
 #define CNN_STATUS       (CNN_BASE + 0x04)
@@ -9,10 +11,8 @@
 #define IMAGE_OFFSET     0x000       // Location of input image in SRAM
 #define OUTPUT_OFFSET    0x400       // Location of output buffer in SRAM
 
-volatile uint32_t* cnn = (uint32_t*)CNN_BASE;
-
-void main() {
-    // Write real CNN weights: [17, 89, 39, 100, 70, 78, 11, 74, 52]
+int main() {
+    // Write CNN weights
     uint8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
     for (int i = 0; i < 9; i++) {
         *((volatile uint32_t*)(CNN_WEIGHT_BASE + 4*i)) = (int8_t)weights[i];
@@ -42,4 +42,6 @@ void main() {
 
     // Set return code with prediction in lower nibble
     *((volatile uint32_t*)0x1A106000) = 0xDEADB000 | (max_index & 0xF);
+
+    return 0;
 }
