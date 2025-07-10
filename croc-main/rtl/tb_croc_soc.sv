@@ -54,7 +54,8 @@ module tb_croc_soc #(
     //  Command Line Arguments //
     /////////////////////////////
     string binary_path;
-    binary_path = "../sw/bin/c_tb.hex";
+    string input_image_path;
+    string label_path;
     
     initial begin
         if ($value$plusargs("binary=%s", binary_path)) begin
@@ -62,6 +63,22 @@ module tb_croc_soc #(
         end else begin
             $display("No binary path provided. Running helloworld.");
             binary_path = "../sw/bin/helloworld.hex";
+        end
+    end
+
+    initial begin
+        if ($value$plusargs("input=%s", input_image_path)) begin
+            $display("Running program: %s", input_image_path);
+        end else begin
+            $display("No input image provided. Skipping input load.");
+        end
+    end
+
+    initial begin
+        if ($value$plusargs("input=%s", label_path)) begin
+            $display("Running program: %s", label_path);
+        end else begin
+            $display("No label provided. Skipping input load.");
         end
     end
 
@@ -440,7 +457,14 @@ module tb_croc_soc #(
     /////////////////
 
     logic [31:0] tb_data;
+    int image_file;
+    logic [7:0] pixel;
+    int pixel_count;
 
+    int label_file;
+    logic [3:0] expected_label;
+    logic [3:0] predicted_label;    
+            
     initial begin
         $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
         // configure VCD dump
@@ -463,12 +487,8 @@ module tb_croc_soc #(
         // load binary to sram
         jtag_load_hex(binary_path);
 
+        
         // Load input_image.mem (28x28 = 784 bytes) into SRAM at 0x1C000000
-        string input_image_path;
-        input_image_path = "vlsi2_project/input_image.mem";
-        int image_file;
-        logic [7:0] pixel;
-        int pixel_count;
         
         image_file = $fopen(input_image_path, "r");
         if (image_file == 0) begin
@@ -500,10 +520,6 @@ module tb_croc_soc #(
         jtag_wait_for_eoc(tb_data);
 
         // === Load expected labels for comparison ===
-        string label_path;
-        label_path = "vlsi2_project/labels.mem";
-        int label_file;
-        logic [3:0] expected_label;
         
         label_file = $fopen(label_path, "r");
         if (label_file == 0) begin
@@ -517,7 +533,6 @@ module tb_croc_soc #(
         $fclose(label_file);
         
         // === Extract predicted label from return code ===
-        logic [3:0] predicted_label;
         predicted_label = tb_data[3:0];
         
         if (predicted_label === expected_label) begin
@@ -525,7 +540,6 @@ module tb_croc_soc #(
         end else begin
           $display("@%t | [CHECK] ❌ Prediction wrong: got %0d, expected %0d", $time, predicted_label, expected_label);
         end
-
         
         // finish simulation
         repeat(50) @(posedge clk);
