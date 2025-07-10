@@ -1,8 +1,6 @@
 `include "../rtl/obi/include/obi/assign.svh"
 `include "../rtl/obi/include/obi/typedef.svh"
 import obi_pkg::*;
-typedef obi_req_t #(ObiCfg) obi_req_t_;
-typedef obi_rsp_t #(ObiCfg) obi_rsp_t_;
 
 module cnn_top #(
     parameter DATA_WIDTH = 8,
@@ -31,6 +29,9 @@ module cnn_top #(
 );
 
 
+    typedef obi_req_t #(ObiCfg) obi_req_t_;
+    typedef obi_rsp_t #(ObiCfg) obi_rsp_t_;
+    
     // Memory-mapped default patch for Croc compatibility
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_OUTPUT_BASE = 32'h1A10_0010;
