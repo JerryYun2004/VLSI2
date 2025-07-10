@@ -4,13 +4,20 @@ import obi_pkg::*;
 
 module cnn_top #(
     parameter DATA_WIDTH = 8, ADDR_WIDTH = 32,
-    parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
+    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig
 ) (
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
-    input  obi_req_t obi_req_i,
-    output obi_rsp_t obi_rsp_o,
+
+    // Subordinate interface (register access)
+    input  obi_req_t sbr_obi_req_i,
+    output obi_rsp_t sbr_obi_rsp_o,
+
+    // Manager interface (memory access)
+    output obi_req_t mgr_obi_req_o,
+    input  obi_rsp_t mgr_obi_rsp_i,
+
     output logic done,
 
     input  logic [DATA_WIDTH-1:0] user_mem_data_in,
@@ -20,13 +27,11 @@ module cnn_top #(
     output logic                  user_mem_write_en
 );
 
-    import obi_pkg::*;
-
     // Memory-mapped default patch for Croc compatibility
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_OUTPUT_BASE = 32'h1A10_0010;
 
-    // Internal registers for OBI handshake
+    // Internal registers for OBI handshake (subordinate interface)
     logic req_q;
     logic we_q;
     logic [ObiCfg.AddrWidth-1:0] addr_q;
@@ -34,15 +39,13 @@ module cnn_top #(
     logic [ObiCfg.DataWidth-1:0] wdata_q;
     logic [ObiCfg.DataWidth-1:0] rsp_data;
     logic rsp_err;
+    logic rvalid_q;
 
     // Accelerator registers
     logic [ADDR_WIDTH-1:0] input_base, output_base;
     logic start_reg;
-    logic status_reg; // ✅ Added
+    logic status_reg;
     logic signed [DATA_WIDTH-1:0] weights_reg [0:8];
-
-    // OBI handshake state
-    logic rvalid_q;
 
     // CNN datapath signals
     logic [DATA_WIDTH-1:0] pixel_in;
@@ -59,7 +62,7 @@ module cnn_top #(
     logic [ADDR_WIDTH-1:0] read_addr;
     logic [ADDR_WIDTH-1:0] write_addr;
 
-    // Latch OBI request fields
+    // Latch subordinate OBI request fields
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             req_q     <= '0;
@@ -71,11 +74,11 @@ module cnn_top #(
             output_base <= DEFAULT_OUTPUT_BASE;
             start_reg   <= 1'b0;
         end else begin
-            req_q   <= obi_req_i.req;
-            we_q    <= obi_req_i.a.we;
-            addr_q  <= obi_req_i.a.addr;
-            id_q    <= obi_req_i.a.aid;
-            wdata_q <= obi_req_i.a.wdata;
+            req_q   <= sbr_obi_req_i.req;
+            we_q    <= sbr_obi_req_i.a.we;
+            addr_q  <= sbr_obi_req_i.a.addr;
+            id_q    <= sbr_obi_req_i.a.aid;
+            wdata_q <= sbr_obi_req_i.a.wdata;
         end
     end
 
@@ -120,13 +123,26 @@ module cnn_top #(
         end
     end
 
-    // OBI response assignments
-    assign obi_rsp_o.gnt = obi_req_i.req;
-    assign obi_rsp_o.rvalid = rvalid_q;
-    assign obi_rsp_o.r.rdata = rsp_data;
-    assign obi_rsp_o.r.rid = id_q;
-    assign obi_rsp_o.r.err = rsp_err;
-    assign obi_rsp_o.r.r_optional = '0;
+    // Subordinate OBI response
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
+    assign sbr_obi_rsp_o.rvalid = rvalid_q;
+    assign sbr_obi_rsp_o.r.rdata = rsp_data;
+    assign sbr_obi_rsp_o.r.rid = id_q;
+    assign sbr_obi_rsp_o.r.err = rsp_err;
+    assign sbr_obi_rsp_o.r.r_optional = '0;
+
+    // Manager OBI memory access: assign request signals
+    assign mgr_obi_req_o.req = (state == READ || state == WRITE);
+    assign mgr_obi_req_o.a.we = (state == WRITE);
+    assign mgr_obi_req_o.a.addr = (state == READ) ? read_addr : write_addr;
+    assign mgr_obi_req_o.a.wdata = user_mem_data_out;
+    assign mgr_obi_req_o.a.be = '1;         // all bytes enabled
+    assign mgr_obi_req_o.a.aid = '0;        // default
+    assign mgr_obi_req_o.a.user = '0;
+    assign mgr_obi_req_o.a.region = '0;
+
+    // Read data from mgr_obi_rsp_i
+    assign user_mem_data_in = mgr_obi_rsp_i.r.rdata;
 
     // Datapath
     line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
