@@ -144,7 +144,7 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   );
 
   // CNN Accelerator instantiation
-  cnn_accel i_cnn_accel (
+  cnn_top i_cnn_accel (
     .clk_i,
     .rst_ni,
     // OBI manager interface (for accessing memory)
