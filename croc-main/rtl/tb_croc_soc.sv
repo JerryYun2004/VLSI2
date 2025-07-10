@@ -54,9 +54,7 @@ module tb_croc_soc #(
     //  Command Line Arguments //
     /////////////////////////////
     string binary_path;
-    initial begin
-          binary_path = "../sw/bin/c_tb.hex";;
-    end
+    binary_path = "../sw/bin/c_tb.hex";
     
     initial begin
         if ($value$plusargs("binary=%s", binary_path)) begin
@@ -467,9 +465,7 @@ module tb_croc_soc #(
 
         // Load input_image.mem (28x28 = 784 bytes) into SRAM at 0x1C000000
         string input_image_path;
-        initial begin
-          input_image_path = "vlsi2_project/input_image.mem";
-        end
+        input_image_path = "vlsi2_project/input_image.mem";
         int image_file;
         logic [7:0] pixel;
         int pixel_count;
@@ -505,9 +501,7 @@ module tb_croc_soc #(
 
         // === Load expected labels for comparison ===
         string label_path;
-        initial begin
-          label_path = "vlsi2_project/labels.mem";
-        end
+        label_path = "vlsi2_project/labels.mem";
         int label_file;
         logic [3:0] expected_label;
         
