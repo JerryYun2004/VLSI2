@@ -10,8 +10,10 @@ module cnn_top #(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
-    input  obi_req_t obi_req_i,
-    output obi_rsp_t obi_rsp_o,
+    input  obi_req_t mgr_obi_req_o,
+    input  obi_rsp_t mgr_obi_rsp_i,
+    input  obi_req_t sbr_obi_req_i,
+    output obi_rsp_t sbr_obi_rsp_o,
     output logic done,
 
     input  logic [DATA_WIDTH-1:0] user_mem_data_in,
@@ -37,6 +39,7 @@ module cnn_top #(
     // Accelerator registers
     logic [ADDR_WIDTH-1:0] input_base, output_base;
     logic start_reg;
+    logic status_reg; 
     logic signed [DATA_WIDTH-1:0] weights_reg [0:8];
 
     // OBI handshake state
