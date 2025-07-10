@@ -3,22 +3,21 @@
 import obi_pkg::*;
 
 module cnn_top #(
-    parameter DATA_WIDTH = 8, ADDR_WIDTH = 32,
-    parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
-    parameter type obi_req_t = obi_req_t #(.Cfg(ObiCfg)),
-    parameter type obi_rsp_t = obi_rsp_t #(.Cfg(ObiCfg))
+    parameter DATA_WIDTH = 8,
+    parameter ADDR_WIDTH = 32,
+    parameter obi_cfg_t ObiCfg = ObiDefaultConfig
 )(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
 
     // Subordinate interface (register access)
-    input  obi_req_t sbr_obi_req_i,
-    output obi_rsp_t sbr_obi_rsp_o,
+    input  obi_req_t #(ObiCfg) sbr_obi_req_i,
+    output obi_rsp_t #(ObiCfg) sbr_obi_rsp_o,
 
     // Manager interface (memory access)
-    output obi_req_t mgr_obi_req_o,
-    input  obi_rsp_t mgr_obi_rsp_i,
+    output obi_req_t #(ObiCfg) mgr_obi_req_o,
+    input  obi_rsp_t #(ObiCfg) mgr_obi_rsp_i,
 
     output logic done,
 
@@ -28,6 +27,7 @@ module cnn_top #(
     output logic [DATA_WIDTH-1:0] user_mem_data_out,
     output logic                  user_mem_write_en
 );
+
 
     // Memory-mapped default patch for Croc compatibility
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
