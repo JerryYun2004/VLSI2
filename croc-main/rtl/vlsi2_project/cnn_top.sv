@@ -4,16 +4,14 @@
 module cnn_top #(
     parameter DATA_WIDTH = 8, ADDR_WIDTH = 32,
     parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
-    parameter type obi_req_t = logic,
-    parameter type obi_rsp_t = logic
+    parameter type obi_req_t = obi_pkg::obi_req_t,
+    parameter type obi_rsp_t = obi_pkg::obi_rsp_t
 ) (
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
-    input  obi_req_t mgr_obi_req_o,
-    input  obi_rsp_t mgr_obi_rsp_i,
-    input  obi_req_t sbr_obi_req_i,
-    output obi_rsp_t sbr_obi_rsp_o,
+    input  obi_req_t obi_req_i,
+    output obi_rsp_t obi_rsp_o,
     output logic done,
 
     input  logic [DATA_WIDTH-1:0] user_mem_data_in,
@@ -23,23 +21,25 @@ module cnn_top #(
     output logic                  user_mem_write_en
 );
 
+    import obi_pkg::*;
+
     // Memory-mapped default patch for Croc compatibility
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_OUTPUT_BASE = 32'h1A10_0010;
 
     // Internal registers for OBI handshake
-    logic req_d, req_q;
-    logic we_d, we_q;
-    logic [ObiCfg.AddrWidth-1:0] addr_d, addr_q;
-    logic [ObiCfg.IdWidth-1:0] id_d, id_q;
-    logic [ObiCfg.DataWidth-1:0] wdata_d, wdata_q;
+    logic req_q;
+    logic we_q;
+    logic [ObiCfg.AddrWidth-1:0] addr_q;
+    logic [ObiCfg.IdWidth-1:0] id_q;
+    logic [ObiCfg.DataWidth-1:0] wdata_q;
     logic [ObiCfg.DataWidth-1:0] rsp_data;
     logic rsp_err;
 
     // Accelerator registers
     logic [ADDR_WIDTH-1:0] input_base, output_base;
     logic start_reg;
-    logic status_reg; 
+    logic status_reg; // ✅ Added
     logic signed [DATA_WIDTH-1:0] weights_reg [0:8];
 
     // OBI handshake state
@@ -59,19 +59,18 @@ module cnn_top #(
     // Memory interface counters
     logic [ADDR_WIDTH-1:0] read_addr;
     logic [ADDR_WIDTH-1:0] write_addr;
-    logic reading, writing;
 
     // Latch OBI request fields
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
-            req_q   <= '0;
-            we_q    <= '0;
-            addr_q  <= '0;
-            id_q    <= '0;
-            wdata_q <= '0;
-            input_base   <= DEFAULT_INPUT_BASE;
-            output_base  <= DEFAULT_OUTPUT_BASE;
-            start_reg    <= 0;
+            req_q     <= '0;
+            we_q      <= '0;
+            addr_q    <= '0;
+            id_q      <= '0;
+            wdata_q   <= '0;
+            input_base  <= DEFAULT_INPUT_BASE;
+            output_base <= DEFAULT_OUTPUT_BASE;
+            start_reg   <= 1'b0;
         end else begin
             req_q   <= obi_req_i.req;
             we_q    <= obi_req_i.a.we;
@@ -86,7 +85,7 @@ module cnn_top #(
     localparam ADDR_STATUS       = 32'h04;
     localparam ADDR_INPUT_BASE   = 32'h08;
     localparam ADDR_OUTPUT_BASE  = 32'h0C;
-    localparam ADDR_WEIGHT_BASE  = 32'h10; // Base address for weights[0] to weights[8]
+    localparam ADDR_WEIGHT_BASE  = 32'h10;
 
     // Register access and response logic
     always_comb begin
@@ -96,7 +95,6 @@ module cnn_top #(
 
         if (req_q) begin
             if (we_q) begin
-                // Write path
                 if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
                     weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
                 end else begin
@@ -108,7 +106,6 @@ module cnn_top #(
                     endcase
                 end
             end else begin
-                // Read path
                 rvalid_q = 1'b1;
                 if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
                     rsp_data = {{(32-DATA_WIDTH){1'b0}}, weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2]};
@@ -132,7 +129,7 @@ module cnn_top #(
     assign obi_rsp_o.r.err = rsp_err;
     assign obi_rsp_o.r.r_optional = '0;
 
-    // Datapath module instantiations
+    // Datapath
     line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
         .clk(clk_i),
         .rst_n(rst_ni),
@@ -147,7 +144,6 @@ module cnn_top #(
         .weight(weights_reg),
         .conv_out(conv_out)
     );
-
 
     relu_streaming_ready_valid #(.DATA_WIDTH(32)) u_relu (
         .clk(clk_i),
@@ -169,7 +165,7 @@ module cnn_top #(
     assign relu_ready_out = 1'b1;
     assign relu_ready_in  = 1'b1;
 
-    // FSM for memory interaction
+    // FSM
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
     state_t state, next_state;
 
@@ -183,7 +179,7 @@ module cnn_top #(
             if (state == IDLE && start_reg) begin
                 read_addr <= input_base;
                 write_addr <= output_base;
-                start_reg <= 1'b0; // <-- Clear start_reg after use
+                start_reg <= 1'b0;
             end
         end
     end
@@ -198,7 +194,7 @@ module cnn_top #(
         user_mem_data_out = pooled_out[DATA_WIDTH-1:0];
 
         case (state)
-            IDLE: if (start_reg) next_state = READ;
+            IDLE:    if (start_reg) next_state = READ;
             READ: begin
                 user_mem_addr = read_addr;
                 user_mem_read_en = 1;
