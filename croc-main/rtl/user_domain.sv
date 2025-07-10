@@ -145,15 +145,25 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
 
   // CNN Accelerator instantiation
   cnn_top i_cnn_accel (
-    .clk_i,
-    .rst_ni,
-    // OBI manager interface (for accessing memory)
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .testmode_i(1'b0),
+  
+    // OBI manager interface (memory access)
     .mgr_obi_req_o (cnn_mgr_obi_req),
     .mgr_obi_rsp_i (cnn_mgr_obi_rsp),
-    // OBI subordinate interface (for register access)
+  
+    // OBI subordinate interface (register access)
     .sbr_obi_req_i (cnn_sbr_obi_req),
-    .sbr_obi_rsp_o (cnn_sbr_obi_rsp)
-    // ... other ports ...
+    .sbr_obi_rsp_o (cnn_sbr_obi_rsp),
+  
+    // Output control and memory datapath
+    .done               (cnn_done),
+    .user_mem_data_in   (cnn_mem_data_in),
+    .user_mem_addr      (cnn_mem_addr),
+    .user_mem_read_en   (cnn_mem_read_en),
+    .user_mem_data_out  (cnn_mem_data_out),
+    .user_mem_write_en  (cnn_mem_write_en)
   );
 
 
