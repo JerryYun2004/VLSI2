@@ -5,10 +5,8 @@ import obi_pkg::*;
 module cnn_top #(
     parameter DATA_WIDTH = 8, ADDR_WIDTH = 32,
     parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
-    /// The request struct.
-    parameter type                         obi_req_t   = logic,
-    /// The response struct.
-    parameter type                         obi_rsp_t   = logic
+    parameter type obi_req_t = obi_req_t #(.Cfg(ObiCfg)),
+    parameter type obi_rsp_t = obi_rsp_t #(.Cfg(ObiCfg))
 )(
     input  logic clk_i,
     input  logic rst_ni,
