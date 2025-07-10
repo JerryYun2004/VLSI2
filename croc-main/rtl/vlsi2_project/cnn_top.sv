@@ -1,5 +1,5 @@
-`include "obi/typedef.svh"
-`include "obi/assign.svh"
+`include "rtl/obi/typedef.svh"
+`include "rtl/obi/assign.svh"
 import obi_pkg::*;
 
 module cnn_top #(
