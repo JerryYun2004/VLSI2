@@ -1,11 +1,10 @@
 `include "obi/typedef.svh"
 `include "obi/assign.svh"
+import obi_pkg::*;
 
 module cnn_top #(
     parameter DATA_WIDTH = 8, ADDR_WIDTH = 32,
     parameter obi_pkg::obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
-    parameter type obi_req_t = obi_pkg::obi_req_t,
-    parameter type obi_rsp_t = obi_pkg::obi_rsp_t
 ) (
     input  logic clk_i,
     input  logic rst_ni,
