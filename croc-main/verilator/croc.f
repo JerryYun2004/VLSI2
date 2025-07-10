@@ -200,7 +200,7 @@
 +define+SYNTHESIS
 +define+VERILATOR
 +incdir+/home/vlsi2_50fs25/VLSI2/croc-main/rtl/common_cells/include
-+incdir+/home/vlsi2_50fs25/VLSI2/croc-main/rtl/obi/include
++incdir+/home/vlsi2_50fs25/VLSI2/croc-main/rtl/obi/include/obi
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/obi/obi_pkg.sv
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/obi/obi_intf.sv
 /home/vlsi2_50fs25/VLSI2/croc-main/rtl/obi/obi_rready_converter.sv
