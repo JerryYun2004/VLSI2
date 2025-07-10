@@ -9,8 +9,7 @@ module cnn_top #(
     parameter type                         obi_req_t   = logic,
     /// The response struct.
     parameter type                         obi_rsp_t   = logic
-) (
-) (
+)(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
