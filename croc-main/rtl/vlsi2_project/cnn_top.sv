@@ -1,6 +1,8 @@
 `include "../rtl/obi/include/obi/assign.svh"
 `include "../rtl/obi/include/obi/typedef.svh"
 import obi_pkg::*;
+typedef obi_req_t #(ObiCfg) obi_req_t_;
+typedef obi_rsp_t #(ObiCfg) obi_rsp_t_;
 
 module cnn_top #(
     parameter DATA_WIDTH = 8,
@@ -12,12 +14,12 @@ module cnn_top #(
     input  logic testmode_i,
 
     // Subordinate interface (register access)
-    input  obi_req_t #(ObiCfg) sbr_obi_req_i,
-    output obi_rsp_t #(ObiCfg) sbr_obi_rsp_o,
-
+    input  obi_req_t_ sbr_obi_req_i,
+    output obi_rsp_t_ sbr_obi_rsp_o,
+    
     // Manager interface (memory access)
-    output obi_req_t #(ObiCfg) mgr_obi_req_o,
-    input  obi_rsp_t #(ObiCfg) mgr_obi_rsp_i,
+    output obi_req_t_ mgr_obi_req_o,
+    input  obi_rsp_t_ mgr_obi_rsp_i,
 
     output logic done,
 
