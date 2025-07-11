@@ -1,28 +1,24 @@
-`include "../rtl/obi/include/obi/assign.svh"
 `include "../rtl/obi/include/obi/typedef.svh"
+`include "../rtl/obi/include/obi/assign.svh"
+
 import obi_pkg::*;
 
 module cnn_top #(
-    parameter DATA_WIDTH = 8,
-    parameter ADDR_WIDTH = 32,
-    /// The OBI configuration for all ports.
-    parameter obi_pkg::obi_cfg_t ObiCfg      = obi_pkg::ObiDefaultConfig,
-    /// The request struct for all ports.
-    parameter type               obi_req_t   = logic,
-    /// The response struct for all ports.
-    parameter type               obi_rsp_t   = logic
+    parameter int unsigned DATA_WIDTH = 8,
+    parameter int unsigned ADDR_WIDTH = 32,
+    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig
 )(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
 
     // Subordinate interface (register access)
-    input  obi_req_t sbr_obi_req_i,
-    output obi_rsp_t sbr_obi_rsp_o,
-    
+    input  obi_req_t #(ObiCfg) sbr_obi_req_i,
+    output obi_rsp_t #(ObiCfg) sbr_obi_rsp_o,
+
     // Manager interface (memory access)
-    output obi_req_t mgr_obi_req_o,
-    input  obi_rsp_t mgr_obi_rsp_i,
+    output obi_req_t #(ObiCfg) mgr_obi_req_o,
+    input  obi_rsp_t #(ObiCfg) mgr_obi_rsp_i,
 
     output logic done,
 
@@ -137,17 +133,19 @@ module cnn_top #(
     assign sbr_obi_rsp_o.r.err = rsp_err;
     assign sbr_obi_rsp_o.r.r_optional = '0;
 
-    // Manager OBI memory access: assign request signals
-    assign mgr_obi_req_o.req = (state == READ || state == WRITE);
-    assign mgr_obi_req_o.a.we = (state == WRITE);
+    // Manager OBI memory access
+    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
+    state_t state, next_state;
+
+    assign mgr_obi_req_o.req    = (state == READ || state == WRITE);
+    assign mgr_obi_req_o.a.we   = (state == WRITE);
     assign mgr_obi_req_o.a.addr = (state == READ) ? read_addr : write_addr;
-    assign mgr_obi_req_o.a.wdata = user_mem_data_out;
-    assign mgr_obi_req_o.a.be = '1;         // all bytes enabled
-    assign mgr_obi_req_o.a.aid = '0;        // default
-    assign mgr_obi_req_o.a.user = '0;
+    assign mgr_obi_req_o.a.wdata  = user_mem_data_out;
+    assign mgr_obi_req_o.a.be     = '1;
+    assign mgr_obi_req_o.a.aid    = '0;
+    assign mgr_obi_req_o.a.user   = '0;
     assign mgr_obi_req_o.a.region = '0;
 
-    // Read data from mgr_obi_rsp_i
     assign user_mem_data_in = mgr_obi_rsp_i.r.rdata;
 
     // Datapath
@@ -185,10 +183,6 @@ module cnn_top #(
     assign relu_valid_in  = window_valid;
     assign relu_ready_out = 1'b1;
     assign relu_ready_in  = 1'b1;
-
-    // FSM
-    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
-    state_t state, next_state;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
