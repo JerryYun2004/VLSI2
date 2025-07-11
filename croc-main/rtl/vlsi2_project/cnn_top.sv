@@ -1,24 +1,28 @@
 `include "../rtl/obi/include/obi/typedef.svh"
 `include "../rtl/obi/include/obi/assign.svh"
-
+`include "../rtl/common_cells/include/common_cells/registers.svh"
 import obi_pkg::*;
 
 module cnn_top #(
     parameter int unsigned DATA_WIDTH = 8,
     parameter int unsigned ADDR_WIDTH = 32,
-    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig
+    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
+    /// The request struct.
+    parameter type                         obi_req_t   = logic,
+    /// The response struct.
+    parameter type                         obi_rsp_t   = logic
 )(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
 
     // Subordinate interface (register access)
-    input  obi_req_t #(ObiCfg) sbr_obi_req_i,
-    output obi_rsp_t #(ObiCfg) sbr_obi_rsp_o,
+    input  obi_req_t sbr_obi_req_i,
+    output obi_rsp_t sbr_obi_rsp_o,
 
     // Manager interface (memory access)
-    output obi_req_t #(ObiCfg) mgr_obi_req_o,
-    input  obi_rsp_t #(ObiCfg) mgr_obi_rsp_i,
+    output obi_req_t mgr_obi_req_o,
+    input  obi_rsp_t mgr_obi_rsp_i,
 
     output logic done,
 
@@ -65,24 +69,20 @@ module cnn_top #(
     logic [ADDR_WIDTH-1:0] write_addr;
 
     // Latch subordinate OBI request fields
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
-            req_q     <= '0;
-            we_q      <= '0;
-            addr_q    <= '0;
-            id_q      <= '0;
-            wdata_q   <= '0;
-            input_base  <= DEFAULT_INPUT_BASE;
-            output_base <= DEFAULT_OUTPUT_BASE;
-            start_reg   <= 1'b0;
-        end else begin
-            req_q   <= sbr_obi_req_i.req;
-            we_q    <= sbr_obi_req_i.a.we;
-            addr_q  <= sbr_obi_req_i.a.addr;
-            id_q    <= sbr_obi_req_i.a.aid;
-            wdata_q <= sbr_obi_req_i.a.wdata;
-        end
-    end
+    // Note to avoid writing trivial always_ff statements we can use this macro defined in registers.svh 
+    `FF(req_q, req_d, '0);
+    `FF(id_q , id_d , '0);
+    `FF(we_q , we_d , '0);
+    `FF(wdata_q , wdata_d , '0);
+    `FF(addr_q , addr_d , '0);
+    `FF(set_bits_accumulator_q, set_bits_accumulator_d, '0);
+    
+    assign req_d = obi_req_i.req;
+    assign id_d = obi_req_i.a.aid;
+    assign we_d = obi_req_i.a.we;
+    assign addr_d = obi_req_i.a.addr;
+    assign wdata_d = obi_req_i.a.wdata;
+
 
     // Register map
     localparam ADDR_CTRL         = 32'h00;
