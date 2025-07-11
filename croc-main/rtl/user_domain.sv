@@ -25,6 +25,13 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
 
   assign interrupts_o = '0;  
 
+  logic cnn_done;
+  logic [31:0] cnn_mem_data_in;
+  logic [31:0] cnn_mem_addr;
+  logic        cnn_mem_read_en;
+  logic [31:0] cnn_mem_data_out;
+  logic        cnn_mem_write_en;
+
 
   //////////////////////
   // User Manager MUX //
