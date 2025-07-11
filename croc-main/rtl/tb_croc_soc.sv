@@ -22,7 +22,7 @@ module tb_croc_soc #(
     parameter int unsigned  UartBaudRate      = 115200,
     parameter int unsigned  UartParityEna     = 0,
 
-    localparam int unsigned ClkFrequency = 1s / ClkPeriod
+    localparam int unsigned ClkFrequency = 1s / ClkPeriod,
 
     parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
     parameter type obi_req_t = logic,
