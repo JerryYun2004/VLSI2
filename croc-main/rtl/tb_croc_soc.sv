@@ -23,6 +23,15 @@ module tb_croc_soc #(
     parameter int unsigned  UartParityEna     = 0,
 
     localparam int unsigned ClkFrequency = 1s / ClkPeriod
+
+    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
+    parameter type obi_req_t = logic,
+    parameter type obi_rsp_t = logic,
+    parameter type  sbr_obi_req_t = logic, // User Sbr (rsp_o), Croc Mgr (req_i)
+    parameter type sbr_obi_rsp_t = logic,
+
+    parameter type mgr_obi_req_t = logic, // User Mgr (req_o), Croc Sbr (rsp_i)
+    parameter type  mgr_obi_rsp_t = logic
 )();
     logic clk;
     logic rst_n;
