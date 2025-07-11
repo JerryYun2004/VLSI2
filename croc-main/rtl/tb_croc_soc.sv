@@ -7,6 +7,8 @@
 
 `define TRACE_WAVE
 `include "../rtl/obi/include/obi/typedef.svh"
+`include "../rtl/obi/include/obi/assign.svh"
+`include "../rtl/common_cells/include/common_cells/registers.svh"
 import obi_pkg::*;
 
 module tb_croc_soc #(
