@@ -75,7 +75,6 @@ module cnn_top #(
     `FF(we_q , we_d , '0);
     `FF(wdata_q , wdata_d , '0);
     `FF(addr_q , addr_d , '0);
-    `FF(set_bits_accumulator_q, set_bits_accumulator_d, '0);
     
     assign req_d = obi_req_i.req;
     assign id_d = obi_req_i.a.aid;
