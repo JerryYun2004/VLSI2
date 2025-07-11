@@ -163,7 +163,7 @@ module cnn_top #(
         .conv_out(conv_out)
     );
 
-    ReLU #(.DATA_WIDTH(32)) u_relu (
+    relu_streaming_ready_valid #(.DATA_WIDTH(32)) u_relu (
         .clk(clk_i),
         .rst_n(rst_ni),
         .in_data(conv_out),
