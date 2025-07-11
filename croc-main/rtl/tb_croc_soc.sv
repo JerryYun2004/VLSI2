@@ -6,6 +6,8 @@
 // - Philippe Sauter <phsauter@iis.ee.ethz.ch>
 
 `define TRACE_WAVE
+`include "../rtl/obi/include/obi/typedef.svh"
+import obi_pkg::*;
 
 module tb_croc_soc #(
     parameter time         ClkPeriod     = 50ns,
