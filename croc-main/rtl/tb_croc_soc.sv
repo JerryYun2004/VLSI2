@@ -11,9 +11,6 @@
 `include "../rtl/common_cells/include/common_cells/registers.svh"
 import obi_pkg::*;
 
-typedef obi_req_t #(obi_pkg::ObiDefaultConfig) obi_req_t_;
-typedef obi_rsp_t #(obi_pkg::ObiDefaultConfig) obi_rsp_t_;
-
 module tb_croc_soc #(
     parameter time         ClkPeriod     = 50ns,
     parameter time         ClkPeriodJtag = 50ns,
@@ -27,11 +24,14 @@ module tb_croc_soc #(
     parameter int unsigned  UartParityEna     = 0,
 
     // OBI config and types
-    parameter obi_cfg_t ObiCfg           = obi_pkg::ObiDefaultConfig,
-    parameter type sbr_obi_req_t         = obi_req_t_,
-    parameter type sbr_obi_rsp_t         = obi_rsp_t_,
-    parameter type mgr_obi_req_t         = obi_req_t_,
-    parameter type mgr_obi_rsp_t         = obi_rsp_t_,
+    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
+    parameter type obi_req_t = logic,
+    parameter type obi_rsp_t = logic,
+    parameter type  sbr_obi_req_t = logic, // User Sbr (rsp_o), Croc Mgr (req_i)
+    parameter type sbr_obi_rsp_t = logic,
+
+    parameter type mgr_obi_req_t = logic, // User Mgr (req_o), Croc Sbr (rsp_i)
+    parameter type  mgr_obi_rsp_t = logic
 
     localparam int unsigned ClkFrequency = 1s / ClkPeriod
 )();
