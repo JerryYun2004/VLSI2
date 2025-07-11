@@ -17,11 +17,10 @@ module tb_croc_soc #(
 
     // UART
     parameter int unsigned  UartBaudRate      = 115200,
-    parameter int unsigned  UartParityEna     = 0,
-
-    localparam int unsigned ClkFrequency = 1s / ClkPeriod
+    parameter int unsigned  UartParityEna     = 0
 )();
 
+    
     logic clk;
     logic rst_n;
     logic ref_clk;
@@ -38,6 +37,7 @@ module tb_croc_soc #(
     logic fetch_en_i;
     logic status_o;
 
+    localparam int unsigned ClkFrequency = 1s / ClkPeriod;
     localparam int unsigned GpioCount = 32;
 
     logic [GpioCount-1:0] gpio_i;             
