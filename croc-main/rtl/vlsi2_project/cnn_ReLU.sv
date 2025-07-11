@@ -6,7 +6,7 @@ module relu_streaming_ready_valid #(
     input  logic                  rst_n,
     input  logic [DATA_WIDTH-1:0] in_data,
     input  logic                  valid_in,
-    input  logic                  ready_in,
+    output  logic                  ready_in,
     output logic [DATA_WIDTH-1:0] out_data,
     output logic                  valid_out,
     output logic                  ready_out
