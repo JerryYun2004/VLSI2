@@ -5,19 +5,24 @@ import obi_pkg::*;
 module cnn_top #(
     parameter DATA_WIDTH = 8,
     parameter ADDR_WIDTH = 32,
-    parameter obi_cfg_t ObiCfg = ObiDefaultConfig
+    /// The OBI configuration for all ports.
+    parameter obi_pkg::obi_cfg_t ObiCfg      = obi_pkg::ObiDefaultConfig,
+    /// The request struct for all ports.
+    parameter type               obi_req_t   = logic,
+    /// The response struct for all ports.
+    parameter type               obi_rsp_t   = logic
 )(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
 
     // Subordinate interface (register access)
-    input  obi_req_t_ sbr_obi_req_i,
-    output obi_rsp_t_ sbr_obi_rsp_o,
+    input  obi_req_t sbr_obi_req_i,
+    output obi_rsp_t sbr_obi_rsp_o,
     
     // Manager interface (memory access)
-    output obi_req_t_ mgr_obi_req_o,
-    input  obi_rsp_t_ mgr_obi_rsp_i,
+    output obi_req_t mgr_obi_req_o,
+    input  obi_rsp_t mgr_obi_rsp_i,
 
     output logic done,
 
