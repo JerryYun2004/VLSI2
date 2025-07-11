@@ -8,19 +8,24 @@ module cnn_top #(
     parameter int unsigned ADDR_WIDTH = 32,
     parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
     parameter type obi_req_t = logic,
-    parameter type obi_rsp_t = logic
+    parameter type obi_rsp_t = logic,
+    parameter type  sbr_obi_req_t = logic, // User Sbr (rsp_o), Croc Mgr (req_i)
+    parameter type sbr_obi_rsp_t = logic,
+
+    parameter type mgr_obi_req_t = logic, // User Mgr (req_o), Croc Sbr (rsp_i)
+    parameter type  mgr_obi_rsp_t = logic
 )(
     input  logic clk_i,
     input  logic rst_ni,
     input  logic testmode_i,
 
     // Subordinate interface (register access)
-    input  obi_req_t sbr_obi_req_i,
-    output obi_rsp_t sbr_obi_rsp_o,
+    input  sbr_obi_req_t sbr_obi_req_i,
+    output sbr_obi_rsp_t sbr_obi_rsp_o,
 
     // Manager interface (memory access)
-    output obi_req_t mgr_obi_req_o,
-    input  obi_rsp_t mgr_obi_rsp_i,
+    output mgr_obi_req_t mgr_obi_req_o,
+    input  mgr_obi_rsp_t mgr_obi_rsp_i,
 
     output logic done,
 
