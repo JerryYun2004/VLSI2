@@ -6,10 +6,6 @@
 // - Philippe Sauter <phsauter@iis.ee.ethz.ch>
 
 `define TRACE_WAVE
-`include "../rtl/obi/include/obi/typedef.svh"
-`include "../rtl/obi/include/obi/assign.svh"
-`include "../rtl/common_cells/include/common_cells/registers.svh"
-import obi_pkg::*;
 
 module tb_croc_soc #(
     parameter time         ClkPeriod     = 50ns,
@@ -22,16 +18,6 @@ module tb_croc_soc #(
     // UART
     parameter int unsigned  UartBaudRate      = 115200,
     parameter int unsigned  UartParityEna     = 0,
-
-    // OBI config and types
-    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
-    parameter type obi_req_t = logic,
-    parameter type obi_rsp_t = logic,
-    parameter type  sbr_obi_req_t = logic, // User Sbr (rsp_o), Croc Mgr (req_i)
-    parameter type sbr_obi_rsp_t = logic,
-
-    parameter type mgr_obi_req_t = logic, // User Mgr (req_o), Croc Sbr (rsp_i)
-    parameter type  mgr_obi_rsp_t = logic
 
     localparam int unsigned ClkFrequency = 1s / ClkPeriod
 )();
