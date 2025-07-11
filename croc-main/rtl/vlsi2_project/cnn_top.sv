@@ -148,7 +148,7 @@ module cnn_top #(
     // and pass it to the CNN pipeline
 
     // Datapath
-    cnn_line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
+    line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
         .clk(clk_i),
         .rst_n(rst_ni),
         .pixel_in(pixel_in),
@@ -157,13 +157,13 @@ module cnn_top #(
         .window_valid(window_valid)
     );
 
-    cnn_conv #(.DATA_WIDTH(DATA_WIDTH), .ACC_WIDTH(32)) u_conv (
+    conv #(.DATA_WIDTH(DATA_WIDTH), .ACC_WIDTH(32)) u_conv (
         .window(window),
         .weight(weights_reg),
         .conv_out(conv_out)
     );
 
-    cnn_ReLU #(.DATA_WIDTH(32)) u_relu (
+    ReLU #(.DATA_WIDTH(32)) u_relu (
         .clk(clk_i),
         .rst_n(rst_ni),
         .in_data(conv_out),
@@ -174,7 +174,7 @@ module cnn_top #(
         .ready_out(relu_ready_out)
     );
 
-    cnn_max_pool #(.DATA_WIDTH(32)) u_max_pool (
+    max_pool #(.DATA_WIDTH(32)) u_max_pool (
         .pool_window('{relu_out_data, relu_out_data, relu_out_data, relu_out_data}),
         .pool_out(pooled_out)
     );
