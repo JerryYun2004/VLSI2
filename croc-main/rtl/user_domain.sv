@@ -158,7 +158,6 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .DATA_WIDTH(8),
     .ADDR_WIDTH(32),
     .SbrObiCfg(SbrObiCfg),
-    .MgrObiCfg(MgrObiCfg)
     .sbr_obi_req_t(sbr_obi_req_t),
     .sbr_obi_rsp_t(sbr_obi_rsp_t),
     .mgr_obi_req_t(mgr_obi_req_t),  //
