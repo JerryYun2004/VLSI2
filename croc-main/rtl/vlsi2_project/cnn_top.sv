@@ -144,8 +144,8 @@ module cnn_top #(
     assign mgr_obi_req_o.a.wdata = user_mem_data_out;
     assign mgr_obi_req_o.a.be     = '1;
     assign mgr_obi_req_o.a.aid    = '0;
-    assign mgr_obi_req_o.a.user   = '0;
-    assign mgr_obi_req_o.a.region = '0;
+    //  mgr_obi_req_o.a.user   = '0;
+    // assign mgr_obi_req_o.a.region = '0;
 
     // Read data from memory
     // (input from DMA/OBI manager)
