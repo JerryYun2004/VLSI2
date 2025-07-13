@@ -55,6 +55,10 @@ module tb_croc_soc #(
     /////////////////////////////
     //  Command Line Arguments //
     /////////////////////////////
+
+    logic [7:0] input_image_mem [0:783];  // 28x28 = 784 bytes
+    logic [3:0] label_mem [0:0];          // Single 4-bit label
+
     string binary_path;
     string input_image_path;
     string label_path;
@@ -70,18 +74,18 @@ module tb_croc_soc #(
 
     initial begin
         if ($value$plusargs("input=%s", input_image_path)) begin
-            $display("Running program: %s", input_image_path);
+            $display("Input image path: %s", input_image_path);
         end else begin
-            input_image_path = "../rtl/vlsi2_project/input_image.mem"; // set default path
+            input_image_path = "../rtl/vlsi2_project/input_image.hex";
             $display("No input image provided. Using default: %s", input_image_path);
         end
     end
-
+    
     initial begin
         if ($value$plusargs("label=%s", label_path)) begin
-            $display("Running program: %s", label_path);
+            $display("Label path: %s", label_path);
         end else begin
-            label_path = "../rtl/vlsi2_project/labels.mem";
+            label_path = "../rtl/vlsi2_project/labels.hex";
             $display("No labels provided. Using default: %s", label_path);
         end
     end
@@ -461,17 +465,11 @@ module tb_croc_soc #(
     /////////////////
 
     logic [31:0] tb_data;
-    int image_file;
-    logic [7:0] pixel;
-    int pixel_count = 0;
-    string line1;
-    int pos;
-    string token;
-            
-    int label_file;
     logic [3:0] expected_label;
     logic [3:0] predicted_label;    
-    
+
+    logic [7:0] class_scores [0:9];
+    logic [31:0] score_data;
             
     initial begin
         $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
@@ -496,47 +494,15 @@ module tb_croc_soc #(
         jtag_load_hex(binary_path);
 
         
-        // Load input_image.mem (28x28 = 784 bytes) into SRAM at 0x1C000000
+          $display("@%t | [JTAG] Loading input_image.hex into memory", $time);
+        $readmemh(input_image_path, input_image_mem);
         
-        image_file = $fopen(input_image_path, "r");
-        if (image_file == 0) begin
-          $fatal(1, "Failed to open input_image.mem!");
+        // Write image into SRAM via JTAG
+        for (int i = 0; i < 784; i++) begin
+            jtag_write_reg32(32'h1C000000 + i, input_image_mem[i], 0);
         end
-        
-        
-        $display("@%t | [JTAG] Writing input image to SRAM", $time);
-
-        while ($fgets(line1, image_file)) begin
-            token = "";
-            for (int i = 0; i < line1.len(); i++) begin
-                if (line1[i] == " " || line1[i] == "\n") begin
-                    if (token.len() > 0) begin
-                        if ($sscanf(token, "%x", pixel) != 1) begin
-                            $fatal(1, "Invalid data in input_image.mem at position %0d", pixel_count);
-                        end
-                        jtag_write_reg32(32'h1C000000 + pixel_count, pixel, 0);
-                        pixel_count++;
-                        token = "";
-                    end
-                end else begin
-                    token = {token, line1[i]};
-                end
-            end
-            // Handle last token if line1 does not end with space
-            if (token.len() > 0) begin
-                if ($sscanf(token, "%x", pixel) != 1) begin
-                    $fatal(1, "Invalid data in input_image.mem at position %0d", pixel_count);
-                end
-                jtag_write_reg32(32'h1C000000 + pixel_count, pixel, 0);
-                pixel_count++;
-            end
-            if (pixel_count >= 784) break;
-        end
-        
-        $fclose(image_file);
 
 
-        
         $display("@%t | [CORE] Start fetching instructions", $time);
         fetch_en_i = 1'b1;
 
@@ -549,19 +515,20 @@ module tb_croc_soc #(
         // wait for non-zero return value (written into core status register)
         $display("@%t | [CORE] Wait for end of code...", $time);
         jtag_wait_for_eoc(tb_data);
+        
+        $display("@%t | [JTAG] Reading confidence scores from SRAM", $time);
+        for (int i = 0; i < 10; i++) begin
+            jtag_read_reg32(32'h1C000400 + i, score_data);
+            class_scores[i] = score_data[7:0];
+            $display("Class %0d: Confidence = %0d", i, class_scores[i]);
+        end
 
         // === Load expected labels for comparison ===
         
-        label_file = $fopen(label_path, "r");
-        if (label_file == 0) begin
-          $fatal(1, "Failed to open labels.mem!");
-        end
-        
-        // Read the first label (for now, one image)
-        if ($fscanf(label_file, "%x ", expected_label) != 1) begin
-          $fatal(1, "Invalid data in labels.mem");
-        end
-        $fclose(label_file);
+        $display("@%t | [JTAG] Loading labels.hex", $time);
+        $readmemh(label_path, label_mem);
+        expected_label = label_mem[0];
+
         
         // === Extract predicted label from return code ===
         predicted_label = tb_data[3:0];
