@@ -11,9 +11,6 @@
 #include "util.h"
 #include "config.h"
 
-#define TB_FREQUENCY 10000000
-#define TB_BAUDRATE    115200
-
 #define CNN_BASE_ADDR      0x1A104000
 #define CNN_CTRL_REG       0x00
 #define CNN_STATUS_REG     0x04
