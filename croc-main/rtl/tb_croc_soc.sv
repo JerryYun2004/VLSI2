@@ -505,22 +505,30 @@ module tb_croc_soc #(
         
         
         $display("@%t | [JTAG] Writing input image to SRAM", $time);
-        
+
         while ($fgets(line1, image_file)) begin
-            pos = 0;
-            while (pos < line1.len()) begin
-                // extract next token (space-separated)
-                token = line1.get_token(pos, " ");
-                if (token == "") break;
-        
+            token = "";
+            for (int i = 0; i < line1.len(); i++) begin
+                if (line1[i] == " " || line1[i] == "\n") begin
+                    if (token.len() > 0) begin
+                        if ($sscanf(token, "%x", pixel) != 1) begin
+                            $fatal(1, "Invalid data in input_image.mem at position %0d", pixel_count);
+                        end
+                        jtag_write_reg32(32'h1C000000 + pixel_count, pixel, 0);
+                        pixel_count++;
+                        token = "";
+                    end
+                end else begin
+                    token = {token, line1[i]};
+                end
+            end
+            // Handle last token if line1 does not end with space
+            if (token.len() > 0) begin
                 if ($sscanf(token, "%x", pixel) != 1) begin
                     $fatal(1, "Invalid data in input_image.mem at position %0d", pixel_count);
                 end
-        
                 jtag_write_reg32(32'h1C000000 + pixel_count, pixel, 0);
                 pixel_count++;
-        
-                if (pixel_count >= 784) break;
             end
             if (pixel_count >= 784) break;
         end
