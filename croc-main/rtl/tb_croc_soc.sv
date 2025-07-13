@@ -499,15 +499,35 @@ module tb_croc_soc #(
           $fatal(1, "Failed to open input_image.mem!");
         end
         
+        string line;
+        int pixel_count = 0;
+        logic [7:0] pixel;
+        int pos;
+        string token;
+        
         $display("@%t | [JTAG] Writing input image to SRAM", $time);
-        for (int i = 0; i < 784; i++) begin
-            if ($fscanf(image_file, "%2x", pixel) != 1) begin
-              $fatal(1, "Invalid data in input_image.mem at byte %0d", i);
+        
+        while ($fgets(line, image_file)) begin
+            pos = 0;
+            while (pos < line.len()) begin
+                // extract next token (space-separated)
+                token = line.get_token(pos, " ");
+                if (token == "") break;
+        
+                if ($sscanf(token, "%x", pixel) != 1) begin
+                    $fatal(1, "Invalid data in input_image.mem at position %0d", pixel_count);
+                end
+        
+                jtag_write_reg32(32'h1C000000 + pixel_count, pixel, 0);
+                pixel_count++;
+        
+                if (pixel_count >= 784) break;
             end
-          jtag_write_reg32(32'h1C000000 + i, pixel, 0); // no check_write, just write 1 byte
+            if (pixel_count >= 784) break;
         end
         
         $fclose(image_file);
+
 
         
         $display("@%t | [CORE] Start fetching instructions", $time);
