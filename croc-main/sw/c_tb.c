@@ -22,6 +22,16 @@
 #define IMAGE_OFFSET     0x000       // Input image location
 #define OUTPUT_OFFSET    0x400       // Output buffer location
 
+// Minimal implementation of memcpy for freestanding environments
+void* memcpy(void* dest, const void* src, unsigned int n) {
+    char* d = (char*)dest;
+    const char* s = (const char*)src;
+    while (n--) {
+        *d++ = *s++;
+    }
+    return dest;
+}
+
 int main() {
     uart_init();
     printf("Starting CNN accelerator test.\n");
