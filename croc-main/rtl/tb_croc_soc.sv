@@ -51,7 +51,8 @@ module tb_croc_soc #(
                                            + soc_ctrl_reg_pkg::SOC_CTRL_FETCHEN_OFFSET;
     localparam bit [31:0] CoreStatusAddr = croc_pkg::SocCtrlAddrOffset
                                            + soc_ctrl_reg_pkg::SOC_CTRL_CORESTATUS_OFFSET;
-
+    localparam bit [31:0] InputImageBaseAddr = 32'h1C000000;
+    
     /////////////////////////////
     //  Command Line Arguments //
     /////////////////////////////
@@ -499,7 +500,7 @@ module tb_croc_soc #(
         
         // Write image into SRAM via JTAG
         for (int i = 0; i < 784; i++) begin
-            jtag_write_reg32(32'h1C000000 + i, input_image_mem[i], 0);
+            jtag_write_reg32(InputImageBaseAddr + i, input_image_mem[i], 0);
         end
 
 
