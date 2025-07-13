@@ -72,7 +72,8 @@ module tb_croc_soc #(
         if ($value$plusargs("input=%s", input_image_path)) begin
             $display("Running program: %s", input_image_path);
         end else begin
-            $display("No input image provided. Skipping input load.");
+            input_image_path = "../rtl/vlsi2_project/input_image.mem"; // set default path
+            $display("No input image provided. Using default: %s", input_image_path);
         end
     end
 
@@ -80,7 +81,8 @@ module tb_croc_soc #(
         if ($value$plusargs("input=%s", label_path)) begin
             $display("Running program: %s", label_path);
         end else begin
-            $display("No label provided. Skipping input load.");
+            label_path = '../rtl/vlsi2_project/labels.mem";
+            $display("No labels provided. Using default: %s", label_path);
         end
     end
 
