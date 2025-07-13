@@ -1,4 +1,12 @@
 #include <stdint.h>
+#include "config.h"
+#include "uart.h"
+#include "print.h"
+#include "gpio.h"
+#include "util.h"
+
+#define TB_FREQUENCY 10000000
+#define TB_BAUDRATE    115200
 
 #define CNN_BASE         0x1A104000
 #define CNN_CTRL         (CNN_BASE + 0x00)
