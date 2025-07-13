@@ -78,7 +78,7 @@ module tb_croc_soc #(
     end
 
     initial begin
-        if ($value$plusargs("input=%s", label_path)) begin
+        if ($value$plusargs("label=%s", label_path)) begin
             $display("Running program: %s", label_path);
         end else begin
             label_path = "../rtl/vlsi2_project/labels.mem";
