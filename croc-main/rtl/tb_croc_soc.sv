@@ -463,11 +463,15 @@ module tb_croc_soc #(
     logic [31:0] tb_data;
     int image_file;
     logic [7:0] pixel;
-    int pixel_count;
-
+    int pixel_count = 0;
+    string line1;
+    int pos;
+    string token;
+            
     int label_file;
     logic [3:0] expected_label;
     logic [3:0] predicted_label;    
+    
             
     initial begin
         $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
@@ -499,19 +503,14 @@ module tb_croc_soc #(
           $fatal(1, "Failed to open input_image.mem!");
         end
         
-        string line;
-        int pixel_count = 0;
-        logic [7:0] pixel;
-        int pos;
-        string token;
         
         $display("@%t | [JTAG] Writing input image to SRAM", $time);
         
-        while ($fgets(line, image_file)) begin
+        while ($fgets(line1, image_file)) begin
             pos = 0;
-            while (pos < line.len()) begin
+            while (pos < line1.len()) begin
                 // extract next token (space-separated)
-                token = line.get_token(pos, " ");
+                token = line1.get_token(pos, " ");
                 if (token == "") break;
         
                 if ($sscanf(token, "%x", pixel) != 1) begin
