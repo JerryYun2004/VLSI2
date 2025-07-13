@@ -81,7 +81,7 @@ module tb_croc_soc #(
         if ($value$plusargs("input=%s", label_path)) begin
             $display("Running program: %s", label_path);
         end else begin
-            label_path = '../rtl/vlsi2_project/labels.mem";
+            label_path = "../rtl/vlsi2_project/labels.mem";
             $display("No labels provided. Using default: %s", label_path);
         end
     end
