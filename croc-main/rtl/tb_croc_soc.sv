@@ -471,6 +471,8 @@ module tb_croc_soc #(
 
     logic [7:0] class_scores [0:9];
     logic [31:0] score_data;
+
+    logic [31:0] word;
             
     initial begin
         $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
@@ -499,10 +501,10 @@ module tb_croc_soc #(
         $readmemh(input_image_path, input_image_mem);
         
         // Write image into SRAM via JTAG
-        for (int i = 0; i < 784; i++) begin
-            jtag_write_reg32(InputImageBaseAddr + i, input_image_mem[i], 0);
+        for (int i = 0; i < 784; i += 4) begin
+            word = {input_image_mem[i+3], input_image_mem[i+2], input_image_mem[i+1], input_image_mem[i]};
+            jtag_write_reg32(32'h1C000000 + i, word, 0);
         end
-
 
         $display("@%t | [CORE] Start fetching instructions", $time);
         fetch_en_i = 1'b1;
