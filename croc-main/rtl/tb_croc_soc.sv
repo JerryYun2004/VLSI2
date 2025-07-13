@@ -501,7 +501,7 @@ module tb_croc_soc #(
         
         $display("@%t | [JTAG] Writing input image to SRAM", $time);
         for (int i = 0; i < 784; i++) begin
-         if ($fscanf(image_file, "%2h%*[\n ]", pixel) != 1) begin
+         if ($fscanf(image_file, "%2h", pixel) != 1) begin
               $fatal(1, "Invalid data in input_image.mem at byte %0d", i);
             end
           jtag_write_reg32(32'h1C000000 + i, pixel, 0); // no check_write, just write 1 byte
