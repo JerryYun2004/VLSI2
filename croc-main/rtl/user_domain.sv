@@ -157,7 +157,7 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   cnn_top #(
     .DATA_WIDTH(8),
     .ADDR_WIDTH(32),
-    .SbrObiCfg(SbrObiCfg),
+    .ObiCfg(SbrObiCfg),
     .sbr_obi_req_t(sbr_obi_req_t),
     .sbr_obi_rsp_t(sbr_obi_rsp_t),
     .mgr_obi_req_t(mgr_obi_req_t),  //
