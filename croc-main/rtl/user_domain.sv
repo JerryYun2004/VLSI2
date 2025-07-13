@@ -39,7 +39,10 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
 
   // CNN is the only manager, hence no mux required
   // will need to instantiate a obi_mux if more managers are involved later
- 
+
+  mgr_obi_req_t cnn_mgr_obi_req;
+  mgr_obi_rsp_t cnn_mgr_obi_rsp;
+  
   assign user_mgr_obi_req_o = cnn_mgr_obi_req;
   assign cnn_mgr_obi_rsp    = user_mgr_obi_rsp_i;
 
@@ -151,10 +154,19 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   );
 
   // CNN Accelerator instantiation
-  cnn_top i_cnn_accel (
+  cnn_top #(
+    .DATA_WIDTH(8),
+    .ADDR_WIDTH(32),
+    .SbrObiCfg(SbrObiCfg),
+    .MgrObiCfg(MgrObiCfg)
+    .sbr_obi_req_t(sbr_obi_req_t),
+    .sbr_obi_rsp_t(sbr_obi_rsp_t),
+    .mgr_obi_req_t(mgr_obi_req_t),  //
+    .mgr_obi_rsp_t(mgr_obi_rsp_t)
+  ) i_cnn_accel (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
-    .testmode_i(1'b0),
+    .testmode_i(testmode_i),   // Use testmode_i input consistently
   
     // OBI manager interface (memory access)
     .mgr_obi_req_o (cnn_mgr_obi_req),
