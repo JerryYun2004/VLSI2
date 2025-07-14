@@ -17,7 +17,6 @@ import croc_pkg::*;
   
   // None
 
-
   /////////////////////////////////////
   // User Subordinate Address maps ////
   /////////////////////////////////////
@@ -28,7 +27,10 @@ import croc_pkg::*;
   localparam bit [31:0] UserRomAddrRange    = 32'h0000_1000;          // every subordinate has at least 4KB
 
   localparam bit [31:0] UserCnnAddrOffset   = croc_pkg::UserBaseAddr + UserRomAddrRange; // 32'h2000_1000;
-  localparam bit [31:0] UserCnnAddrRange    = 32'h0001_4000;          // every subordinate has at least 4KB
+  localparam bit [31:0] UserCnnAddrRange    = 32'h0001_4000;          // ~80 KB
+
+  // Define Return Code Register within CNN address space
+  localparam bit [31:0] UserReturnCodeAddr = UserCnnAddrOffset + 32'h00002000; // 0x20003000
 
   localparam int unsigned NumDemuxSbrRules  = NumUserDomainSubordinates; // number of address rules in the decoder
   localparam int unsigned NumDemuxSbr       = NumDemuxSbrRules + 1; // additional OBI error, used for signal arrays
