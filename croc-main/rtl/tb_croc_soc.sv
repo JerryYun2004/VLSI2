@@ -1,558 +1,234 @@
-// Copyright 2024 ETH Zurich and University of Bologna.
-// Solderpad Hardware License, Version 0.51, see LICENSE for details.
-// SPDX-License-Identifier: SHL-0.51
-//
-// Authors:
-// - Philippe Sauter <phsauter@iis.ee.ethz.ch>
+`include "../rtl/obi/include/obi/typedef.svh"
+`include "../rtl/obi/include/obi/assign.svh"
+`include "../rtl/common_cells/include/common_cells/registers.svh"
+import obi_pkg::*;
 
-`define TRACE_WAVE
-import user_pkg::*;
-import croc_pkg::*;
-import soc_ctrl_reg_pkg::*;
+module cnn_top #(
+    parameter int unsigned DATA_WIDTH = 8,
+    parameter int unsigned ADDR_WIDTH = 32,
+    parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
+    parameter type obi_req_t = logic,
+    parameter type obi_rsp_t = logic,
+    parameter type  sbr_obi_req_t = logic,
+    parameter type sbr_obi_rsp_t = logic,
+    parameter type mgr_obi_req_t = logic,
+    parameter type  mgr_obi_rsp_t = logic
+)(
+    input  logic clk_i,
+    input  logic rst_ni,
+    input  logic testmode_i,
+    input  sbr_obi_req_t sbr_obi_req_i,
+    output sbr_obi_rsp_t sbr_obi_rsp_o,
+    output mgr_obi_req_t mgr_obi_req_o,
+    input  mgr_obi_rsp_t mgr_obi_rsp_i,
+    output logic done,
+    input  logic [DATA_WIDTH-1:0] user_mem_data_in,
+    output logic [ADDR_WIDTH-1:0] user_mem_addr,
+    output logic user_mem_read_en,
+    output logic [DATA_WIDTH-1:0] user_mem_data_out,
+    output logic user_mem_write_en
+);
 
+    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_1000;
 
-module tb_croc_soc #(
-    parameter time         ClkPeriod     = 50ns,
-    parameter time         ClkPeriodJtag = 50ns,
-    parameter time         ClkPeriodRef  = 30518ns,
-    parameter time         TAppl         = 0.2*ClkPeriod,
-    parameter time         TTest         = 0.8*ClkPeriod,
-    parameter int unsigned RstCycles     = 1,
+    logic signed [31:0] class_scores [0:9];
 
-    // UART
-    parameter int unsigned  UartBaudRate      = 115200,
-    parameter int unsigned  UartParityEna     = 0
-)();
+    logic req_q, req_d;
+    logic we_q, we_d;
+    logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
+    logic [ObiCfg.IdWidth-1:0] id_q, id_d;
+    logic [ObiCfg.DataWidth-1:0] wdata_q, wdata_d;
+    logic [ObiCfg.DataWidth-1:0] rsp_data;
+    logic rsp_err;
+    logic rvalid;
 
-    
-    logic clk;
-    logic rst_n;
-    logic ref_clk;
+    logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
+    logic start_reg_q, start_reg_d;
+    logic status_reg;
+    logic signed [DATA_WIDTH-1:0] weights_reg[0:8];
 
-    logic jtag_tck_i;
-    logic jtag_trst_ni;
-    logic jtag_tms_i;
-    logic jtag_tdi_i;
-    logic jtag_tdo_o;
+    logic [3:0] class_idx_q, class_idx_d;
 
-    logic uart_rx_i;
-    logic uart_tx_o;
+    logic [DATA_WIDTH-1:0] pixel_in;
+    logic valid_in;
+    logic [DATA_WIDTH-1:0] window[0:8];
+    logic window_valid;
+    logic signed [31:0] conv_out, relu_out_data, pooled_out;
+    logic relu_valid_in, relu_ready_in;
+    logic relu_valid_out, relu_ready_out;
 
-    logic fetch_en_i;
-    logic status_o;
+    logic [ADDR_WIDTH-1:0] read_addr;
 
-    localparam int unsigned ClkFrequency = 1s / ClkPeriod;
-    localparam int unsigned GpioCount = 32;
+    `FF(req_q, req_d, '0)
+    `FF(we_q, we_d, '0)
+    `FF(addr_q, addr_d, '0)
+    `FF(id_q, id_d, '0)
+    `FF(wdata_q, wdata_d, '0)
+    `FF(input_base_q, input_base_d, DEFAULT_INPUT_BASE)
+    `FF(start_reg_q, start_reg_d, 1'b0)
+    `FF(class_idx_q, class_idx_d, 4'd0)
 
-    logic [GpioCount-1:0] gpio_i;             
-    logic [GpioCount-1:0] gpio_o;            
-    logic [GpioCount-1:0] gpio_out_en_o;
+    assign req_d = sbr_obi_req_i.req;
+    assign we_d = sbr_obi_req_i.a.we;
+    assign addr_d = sbr_obi_req_i.a.addr;
+    assign id_d = sbr_obi_req_i.a.aid;
+    assign wdata_d = sbr_obi_req_i.a.wdata;
 
-    // Register addresses
-    localparam bit [31:0] BootAddrAddr   = croc_pkg::SocCtrlAddrOffset
-                                           + soc_ctrl_reg_pkg::SOC_CTRL_BOOTADDR_OFFSET;
-    localparam bit [31:0] FetchEnAddr    = croc_pkg::SocCtrlAddrOffset
-                                           + soc_ctrl_reg_pkg::SOC_CTRL_FETCHEN_OFFSET;
-    localparam bit [31:0] CoreStatusAddr = croc_pkg::SocCtrlAddrOffset
-                                           + soc_ctrl_reg_pkg::SOC_CTRL_CORESTATUS_OFFSET;
-    localparam bit [31:0] InputImageBaseAddr = croc_pkg::SramBaseAddr + 32'h1000; // 0x10000000 + 0x1000
-    localparam bit [31:0] OutputBaseAddr     = InputImageBaseAddr + 32'h1000;      // 0x10002000
-    
-    /////////////////////////////
-    //  Command Line Arguments //
-    /////////////////////////////
+    localparam ADDR_CTRL = 32'h00;
+    localparam ADDR_STATUS = 32'h04;
+    localparam ADDR_INPUT_BASE = 32'h08;
+    localparam ADDR_WEIGHT_BASE = 32'h10;
+    localparam ADDR_CLASS_IDX = 32'h14;
 
-    logic [7:0] input_image_mem [0:783];  // 28x28 = 784 bytes
-    logic [3:0] label_mem [0:0];          // Single 4-bit label
+    localparam ADDR_CLASS_SCORES = 32'h20;
 
-    string binary_path;
-    string input_image_path;
-    string label_path;
-    
-    initial begin
-        if ($value$plusargs("binary=%s", binary_path)) begin
-            $display("Running program: %s", binary_path);
-        end else begin
-            $display("No binary path provided. Running helloworld.");
-            binary_path = "../sw/bin/helloworld.hex";
-        end
-    end
+    always_comb begin
+        rsp_data = '0;
+        rsp_err = 1'b0;
+        rvalid = 1'b0;
+        input_base_d = input_base_q;
+        start_reg_d = start_reg_q;
+        class_idx_d = class_idx_q;
 
-    initial begin
-        if ($value$plusargs("input=%s", input_image_path)) begin
-            $display("Input image path: %s", input_image_path);
-        end else begin
-            input_image_path = "../rtl/vlsi2_project/input_image.hex";
-            $display("No input image provided. Using default: %s", input_image_path);
-        end
-    end
-    
-    initial begin
-        if ($value$plusargs("label=%s", label_path)) begin
-            $display("Label path: %s", label_path);
-        end else begin
-            label_path = "../rtl/vlsi2_project/labels.hex";
-            $display("No labels provided. Using default: %s", label_path);
-        end
-    end
-
-
-    //////////////
-    //  Clocks  //
-    //////////////
-
-    clk_rst_gen #(
-        .ClkPeriod    ( ClkPeriod ),
-        .RstClkCycles ( RstCycles )
-    ) i_clk_rst_sys (
-        .clk_o  ( clk   ),
-        .rst_no ( rst_n )
-    );
-
-    clk_rst_gen #(
-        .ClkPeriod    ( ClkPeriodRef ),
-        .RstClkCycles ( RstCycles )
-    ) i_clk_rst_rtc (
-        .clk_o  ( ref_clk ),
-        .rst_no ( )
-    );
-
-    clk_rst_gen #(
-        .ClkPeriod    ( ClkPeriodJtag ),
-        .RstClkCycles ( RstCycles )
-    ) i_clk_jtag (
-        .clk_o  ( jtag_tck_i ),
-        .rst_no ( )
-    );
-
-
-    ////////////
-    //  JTAG  //
-    ////////////
-    localparam dm::sbcs_t JtagInitSbcs = dm::sbcs_t'{
-        sbautoincrement: 1'b1, sbreadondata: 1'b1, sbaccess: 3, default: '0};
-
-    riscv_dbg_simple #(
-        .IrLength ( 5 ),
-        .TA       ( TAppl ),
-        .TT       ( TTest )
-    ) jtag_dbg (
-        .jtag_tck_i   ( jtag_tck_i   ),
-        .jtag_trst_no ( jtag_trst_ni ),
-        .jtag_tms_o   ( jtag_tms_i ),
-        .jtag_tdi_o   ( jtag_tdi_i ),
-        .jtag_tdo_i   ( jtag_tdo_o   )
-    );
-
-    initial begin
-      #(ClkPeriod/2);
-      jtag_dbg.reset_master();
-    end
-
-
-    /////////////////
-    //  JTAG Tasks //
-    /////////////////
-
-    task automatic jtag_write(
-        input dm::dm_csr_e addr,
-        input logic [31:0] data,
-        input bit wait_cmd = 0,
-        input bit wait_sba = 0
-    );
-        jtag_dbg.write_dmi(addr, data);
-        if (wait_cmd) begin
-            dm::abstractcs_t acs;
-            do begin
-                jtag_dbg.read_dmi_exp_backoff(dm::AbstractCS, acs);
-                if (acs.cmderr) $fatal(1, "[JTAG] Abstract command error!");
-            end while (acs.busy);
-        end
-        if (wait_sba) begin
-            dm::sbcs_t sbcs;
-            do begin
-                jtag_dbg.read_dmi_exp_backoff(dm::SBCS, sbcs);
-                if (sbcs.sberror | sbcs.sbbusyerror) $fatal(1, "[JTAG] System bus error!");
-            end while (sbcs.sbbusy);
-        end
-    endtask
-
-    // Initialize the debug module
-    task automatic jtag_init;
-        logic [31:0] idcode;
-        dm::dmcontrol_t dmcontrol = '{dmactive: 1, default: '0};
-        // Check ID code
-        repeat(100) @(posedge jtag_tck_i);
-        jtag_dbg.get_idcode(idcode);
-        if (idcode != croc_pkg::PulpJtagIdCode)
-            $fatal(1, "@%t | [JTAG] Unexpected ID code: expected 0x%h, got 0x%h!",
-                $time, croc_pkg::PulpJtagIdCode, idcode);
-        // Activate, wait for debug module
-        jtag_write(dm::DMControl, dmcontrol);
-        do jtag_dbg.read_dmi_exp_backoff(dm::DMControl, dmcontrol);
-        while (~dmcontrol.dmactive);
-        // Activate, wait for system bus
-        jtag_write(dm::SBCS, JtagInitSbcs, 0, 1);
-        jtag_write(dm::SBAddress1, '0); // 32-bit addressing only
-        $display("@%t | [JTAG] Initialization success", $time);
-    endtask
-
-    // Halt the core
-    task automatic jtag_halt;
-      dm::dmstatus_t status;
-      // Halt hart 0
-      jtag_write(dm::DMControl, dm::dmcontrol_t'{haltreq: 1, dmactive: 1, default: '0});
-      $display("@%t | [JTAG] Halting hart 0... ", $time);
-      do jtag_dbg.read_dmi_exp_backoff(dm::DMStatus, status);
-      while (~status.allhalted);
-      $display("@%t | [JTAG] Halted", $time);
-    endtask
-
-    task automatic jtag_resume;
-      dm::dmstatus_t status;
-      // Halt hart 0
-      jtag_write(dm::DMControl, dm::dmcontrol_t'{resumereq: 1, dmactive: 1, default: '0});
-      $display("@%t | [JTAG] Resumed hart 0 ", $time);
-    endtask
-
-    task automatic jtag_read_reg32(
-        input logic [31:0] addr,
-        output logic [31:0] data,
-        input int unsigned idle_cycles = 10
-    );
-        automatic dm::sbcs_t sbcs = dm::sbcs_t'{sbreadonaddr: 1'b1, sbaccess: 2, default: '0};
-        jtag_write(dm::SBCS, sbcs, 0, 1);
-        jtag_write(dm::SBAddress0, addr[31:0]);
-        jtag_dbg.wait_idle(idle_cycles);
-        jtag_dbg.read_dmi_exp_backoff(dm::SBData0, data);
-        $display("@%t | [JTAG] Read 0x%h from 0x%h", $time, data, addr);
-    endtask
-
-    task automatic jtag_write_reg32(
-        input logic [31:0] addr,
-        input logic [31:0] data,
-        input bit check_write = 1'b0,
-        input int unsigned idle_cycles = 10
-    );
-        automatic dm::sbcs_t sbcs = dm::sbcs_t'{sbaccess: 2, default: '0};
-        $display("@%t | [JTAG] Writing 0x%h to 0x%h", $time, data, addr);
-        jtag_write(dm::SBCS, sbcs, 0, 1);
-        jtag_write(dm::SBAddress0, addr);
-        jtag_write(dm::SBData0, data);
-        jtag_dbg.wait_idle(idle_cycles);
-        if (check_write) begin
-            logic [31:0] rdata;
-            jtag_read_reg32(addr, rdata);
-            if (rdata !== data) $fatal(1,"@%t | [JTAG] Read back incorrect data 0x%h!", $time, rdata);
-            else $display("@%t | [JTAG] Read back correct data", $time);
-        end
-    endtask
-
-
-    // Load the binary formated as 32bit hex file
-    task jtag_load_hex(input string filename);
-        int file;
-        int status;
-        string line;
-        bit [31:0] addr;
-        bit [31:0] data;
-        bit [7:0] byte_data;
-        int byte_count;
-        static dm::sbcs_t sbcs = dm::sbcs_t'{sbautoincrement: 1'b1, sbaccess: 2, default: '0};
-
-        file = $fopen(filename, "r");
-        if (file == 0) begin
-            if (file == 0) begin
-                $fatal(1, "Error: Failed to open file %s", filename);
-        end
-        end
-
-        $display("@%t | [JTAG] Loading binary from %s", $time, filename);
-        jtag_dbg.write_dmi(dm::SBCS, sbcs);
-
-        // line by line
-        while (!$feof(file)) begin
-            if ($fgets(line, file) == 0) begin
-                break; // End of file
-            end
-            
-            // '@' indicates address
-            if (line[0] == "@") begin
-                status = $sscanf(line, "@%h", addr);
-                if (status != 1) begin
-                    $fatal(1, "Error: Incorrect address line format in file %s", filename);
-                end
-                $display("@%t | [JTAG] Writing to memory @%08x ", $time, addr);
-                jtag_dbg.write_dmi(dm::SBAddress0, addr);
-                continue;
-            end
-
-            byte_count = 0;
-            data = 32'h0;
-
-            // Loop through the line to read bytes
-            while (line.len() > 0) begin
-                status = $sscanf(line, "%h", byte_data); // Extract one byte
-                if (status != 1) begin
-                    break; // No more data to read on this line
-                end
-
-                // Shift in the byte to the correct position in the data word
-                data = {byte_data, data[31:8]}; // Combine bytes into a 32-bit word
-                byte_count++;
-
-                // remove the byte from the line (2 numbers + 1 space)
-                line = line.substr(3, line.len()-1);
-
-                // write a complete word via jtag
-                if (byte_count == 4) begin
-                    jtag_write(dm::SBData0, data);
-                    addr += 4;
-                    data = 32'h0;
-                    byte_count = 0;
-                end
-            end
-        end
-        jtag_dbg.write_dmi(dm::SBCS, JtagInitSbcs);
-        $fclose(file);
-    endtask
-
-    // Wait for termination signal and get return code
-    task automatic jtag_wait_for_eoc(output bit [31:0] exit_code);
-        automatic dm::sbcs_t sbcs = dm::sbcs_t'{sbreadonaddr: 1'b1, sbaccess: 2, default: '0};
-        jtag_write(dm::SBCS, sbcs, 0, 1);
-        jtag_write(dm::SBAddress1, '0);
-        do begin
-            jtag_write(dm::SBAddress0, CoreStatusAddr);
-            jtag_dbg.wait_idle(20);
-            jtag_dbg.read_dmi_exp_backoff(dm::SBData0, exit_code);
-        end while (exit_code == 0);
-        $display("@%t | [JTAG] Simulation finished: return code 0x%0h", $time, exit_code);
-        $finish();
-    endtask
-
-
-    ////////////
-    //  UART  //
-    ////////////
-
-    typedef bit [ 7:0] byte_bt;
-    localparam int unsigned UartDivisior = ClkFrequency / (UartBaudRate*16);
-    localparam UartRealBaudRate = ClkFrequency / (UartDivisior*16);
-    localparam time UartBaudPeriod = 1s/UartRealBaudRate;
-
-    initial begin
-        $display("ClkFrequency: %dMHz", ClkFrequency/1000_000);
-        $display("UartRealBaudRate: %d", UartRealBaudRate);
-    end
-
-    localparam byte_bt UartDebugCmdRead  = 'h11;
-    localparam byte_bt UartDebugCmdWrite = 'h12;
-    localparam byte_bt UartDebugCmdExec  = 'h13;
-    localparam byte_bt UartDebugAck      = 'h06;
-    localparam byte_bt UartDebugEot      = 'h04;
-    localparam byte_bt UartDebugEoc      = 'h14;
-
-    logic   uart_reading_byte;
-
-    initial begin
-        uart_rx_i         = 1;
-        uart_reading_byte = 0;
-    end
-
-    task automatic uart_read_byte(output byte_bt bite);
-        // Start bit
-        @(negedge uart_tx_o);
-        uart_reading_byte = 1;
-        #(UartBaudPeriod/2);
-        // 8-bit byte
-        for (int i = 0; i < 8; i++) begin
-        #UartBaudPeriod bite[i] = uart_tx_o;
-        end
-        // Parity bit
-        if(UartParityEna) begin
-        bit parity;
-        #UartBaudPeriod parity = uart_tx_o;
-        if(parity ^ (^bite))
-            $error("[UART] - Parity error detected!");
-        end
-        // Stop bit
-        #UartBaudPeriod;
-        uart_reading_byte=0;
-    endtask
-
-    task automatic uart_write_byte(input byte_bt bite);
-        // Start bit
-        uart_rx_i = 1'b0;
-        // 8-bit byte
-        for (int i = 0; i < 8; i++)
-        #UartBaudPeriod uart_rx_i = bite[i];
-        // Parity bit
-        if (UartParityEna)
-        #UartBaudPeriod uart_rx_i = (^bite);
-        // Stop bit
-        #UartBaudPeriod uart_rx_i = 1'b1;
-        #UartBaudPeriod;
-    endtask
-
-    // Continually read characters and print lines
-    // TODO: we should be able to support CR properly, but buffers are hard to deal with...
-    initial begin
-        static byte_bt uart_read_buf[$];
-        byte_bt bite;
-        
-        @(posedge fetch_en_i);
-        uart_read_buf.delete();
-        forever begin
-            uart_read_byte(bite);
-            
-            if (bite == "\n" || uart_read_buf.size() > 80) begin
-                 if (uart_read_buf.size() > 0) begin
-                    automatic string uart_str = "";               
-                    foreach (uart_read_buf[i]) begin
-                        uart_str = {uart_str, uart_read_buf[i]};
-                    end
-                    
-                    $display("@%t | [UART] %s", $time, uart_str);
-                    uart_read_buf.push_back(bite);
-                    $display("@%t | [UART] raw: %p", $time, uart_read_buf);
-  
+        if (req_q) begin
+            if (we_q) begin
+                if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
+                    weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
                 end else begin
-                    $display("@%t | [UART] ???", $time);
+                    unique case (addr_q)
+                        ADDR_CTRL:        start_reg_d = 1'b1;
+                        ADDR_INPUT_BASE:  input_base_d = wdata_q;
+                        ADDR_CLASS_IDX:   class_idx_d  = wdata_q[3:0];
+                        default:          rsp_err = 1'b1;
+                    endcase
                 end
-
-                uart_read_buf.delete();
             end else begin
-                uart_read_buf.push_back(bite);
+                rvalid = 1'b1;
+                if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
+                    rsp_data = {{(32 - DATA_WIDTH){1'b0}}, weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2]};
+                end else begin
+                    unique case (addr_q)
+                        ADDR_STATUS:      rsp_data = status_reg;
+                        ADDR_INPUT_BASE:  rsp_data = input_base_q;
+                        ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
+                        default: begin
+                            if ((addr_q >= ADDR_CLASS_SCORES) && (addr_q < ADDR_CLASS_SCORES + 10*4)) begin
+                                rsp_data = class_scores[(addr_q - ADDR_CLASS_SCORES) >> 2];
+                            end else begin
+                                rsp_data = 32'hDEAD_BEEF;
+                            end
+                        end
+                    endcase
+                end
             end
         end
+
+        if (state == IDLE && start_reg_q) begin
+            start_reg_d = 1'b0;
+        end
     end
 
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
+    assign sbr_obi_rsp_o.rvalid = rvalid;
+    assign sbr_obi_rsp_o.r.rdata = rsp_data;
+    assign sbr_obi_rsp_o.r.rid = id_q;
+    assign sbr_obi_rsp_o.r.err = rsp_err;
+    assign sbr_obi_rsp_o.r.r_optional = '0;
 
+    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
+    state_t state, next_state;
 
-    ////////////
-    //  DUT   //
-    ////////////
-    `ifdef TARGET_NETLIST_YOSYS
-        \croc_soc$croc_chip.i_croc_soc i_croc_soc (
-    `else
-        croc_soc #(
-            .GpioCount ( GpioCount  )
-        ) i_croc_soc (
-    `endif
-        .clk_i         ( clk        ),
-        .rst_ni        ( rst_n      ),
-        .ref_clk_i     ( ref_clk    ),
-        .testmode_i    ( 1'b0       ),
-        .fetch_en_i    ( fetch_en_i ),
-        .status_o      ( status_o   ),
+    assign mgr_obi_req_o.req = (state == READ);
+    assign mgr_obi_req_o.a.we = 1'b0;
+    assign mgr_obi_req_o.a.addr = read_addr;
+    assign mgr_obi_req_o.a.wdata = '0;
+    assign mgr_obi_req_o.a.be = '1;
+    assign mgr_obi_req_o.a.aid = '0;
 
-        .jtag_tck_i    ( jtag_tck_i   ),
-        .jtag_tdi_i    ( jtag_tdi_i   ),
-        .jtag_tdo_o    ( jtag_tdo_o   ),
-        .jtag_tms_i    ( jtag_tms_i   ),
-        .jtag_trst_ni  ( jtag_trst_ni ),
-
-        .uart_rx_i     ( uart_rx_i ),
-        .uart_tx_o     ( uart_tx_o ),
-
-        .gpio_i        ( gpio_i        ),             
-        .gpio_o        ( gpio_o        ),            
-        .gpio_out_en_o ( gpio_out_en_o )
+    line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
+        .clk(clk_i),
+        .rst_n(rst_ni),
+        .pixel_in(pixel_in),
+        .valid_in(valid_in),
+        .window(window),
+        .window_valid(window_valid)
     );
 
-    assign gpio_i[ 3:0]          = '0;
-    assign gpio_i[ 7:4]          = gpio_out_en_o[3:0] & gpio_o[3:0]; // loop back
-    assign gpio_i[GpioCount-1:8] = '0;
+    conv #(.DATA_WIDTH(DATA_WIDTH), .ACC_WIDTH(32)) u_conv (
+        .window(window),
+        .weight(weights_reg),
+        .conv_out(conv_out)
+    );
 
+    relu_streaming_ready_valid #(.DATA_WIDTH(32)) u_relu (
+        .clk(clk_i),
+        .rst_n(rst_ni),
+        .in_data(conv_out),
+        .valid_in(relu_valid_in),
+        .ready_in(relu_ready_in),
+        .out_data(relu_out_data),
+        .valid_out(relu_valid_out),
+        .ready_out(relu_ready_out)
+    );
 
-    /////////////////
-    //  Testbench  //
-    /////////////////
+    max_pool #(.DATA_WIDTH(32)) u_max_pool (
+        .pool_window('{relu_out_data, relu_out_data, relu_out_data, relu_out_data}),
+        .pool_out(pooled_out)
+    );
 
-    logic [31:0] tb_data;
-    logic [3:0] expected_label;
-    logic [3:0] predicted_label;    
+    assign relu_valid_in = window_valid;
+    assign relu_ready_out = 1'b1;
+    assign relu_ready_in = 1'b1;
 
-    logic [7:0] class_scores [0:9];
-    logic [31:0] score_data;
-
-    logic [31:0] word;
-            
-    initial begin
-        $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
-        // configure VCD dump
-        `ifdef TRACE_WAVE
-        $dumpfile("croc.vcd");
-        $dumpvars(1,i_croc_soc);
-        `endif
-
-        uart_rx_i  = 1'b0;
-        fetch_en_i = 1'b0;
-        
-        // wait for reset
-        #ClkPeriod;
-
-        // init jtag
-        jtag_init();
-
-        // write test value to sram
-        jtag_write_reg32(croc_pkg::SramBaseAddr, 32'h1234_5678, 1'b1);
-        // load binary to sram
-        jtag_load_hex(binary_path);
-
-        
-          $display("@%t | [JTAG] Loading input_image.hex into memory", $time);
-        $readmemh(input_image_path, input_image_mem);
-        
-        // Write image into SRAM via JTAG
-        for (int i = 0; i < 784; i += 4) begin
-            word = {input_image_mem[i+3], input_image_mem[i+2], input_image_mem[i+1], input_image_mem[i]};
-            jtag_write_reg32(InputImageBaseAddr + i, word, 0);
-        end
-
-        $display("@%t | [CORE] Start fetching instructions", $time);
-        fetch_en_i = 1'b1;
-
-        // halt core
-        jtag_halt();
-
-        // resume core
-        jtag_resume();
-
-        // wait for non-zero return value (written into core status register)
-        $display("@%t | [CORE] Wait for end of code...", $time);
-        jtag_wait_for_eoc(tb_data);
-        
-        $display("@%t | [JTAG] Reading confidence scores from CNN internal registers", $time);
-        for (int i = 0; i < 10; i++) begin
-            jtag_read_reg32(user_pkg::CnnClassScoresBase + i*4, score_data);
-            class_scores[i] = score_data[7:0];
-            $display("Class %0d: Accumulated Confidence = %0d", i, class_scores[i]);
-        end
-
-        // === Load expected labels for comparison ===
-        
-        $display("@%t | [JTAG] Loading labels.hex", $time);
-        $readmemh(label_path, label_mem);
-        expected_label = label_mem[0];
-
-        
-        // === Extract predicted label from return code ===
-        predicted_label = tb_data[3:0];
-        
-        if (predicted_label === expected_label) begin
-          $display("@%t | [CHECK] ✅ Prediction correct: %0d == %0d", $time, predicted_label, expected_label);
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            state <= IDLE;
+            read_addr <= '0;
+            for (int i = 0; i < 10; i++) begin
+                class_scores[i] <= 32'd0;
+            end
         end else begin
-          $display("@%t | [CHECK] ❌ Prediction wrong: got %0d, expected %0d", $time, predicted_label, expected_label);
+            state <= next_state;
         end
-        
-        // finish simulation
-        repeat(50) @(posedge clk);
-        `ifdef TRACE_WAVE
-        $dumpflush;
-        `endif
-        $finish();
     end
+
+    always_comb begin
+        next_state = state;
+        valid_in = 0;
+        user_mem_read_en = 0;
+        user_mem_write_en = 0;
+        user_mem_addr = 0;
+        pixel_in = 0;
+        user_mem_data_out = '0;
+
+        case (state)
+            IDLE:    if (start_reg_q) next_state = READ;
+            READ: begin
+                user_mem_addr = read_addr;
+                user_mem_read_en = 1;
+                pixel_in = user_mem_data_in;
+                valid_in = 1;
+                next_state = PROCESS;
+            end
+            PROCESS: if (relu_valid_out) next_state = WRITE;
+            WRITE: begin
+                class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
+                $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores[class_idx_q]);
+                next_state = IDLE;
+            end
+        endcase
+    end
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            status_reg <= 1'b0;
+        end else if (state == WRITE) begin
+            status_reg <= 1'b1;
+        end else if (state == IDLE) begin
+            status_reg <= 1'b0;
+        end
+    end
+
+    assign done = status_reg;
 
 endmodule
