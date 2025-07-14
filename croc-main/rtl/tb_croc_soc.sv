@@ -6,6 +6,10 @@
 // - Philippe Sauter <phsauter@iis.ee.ethz.ch>
 
 `define TRACE_WAVE
+import user_pkg::*;
+import croc_pkg::*;
+import soc_ctrl_reg_pkg::*;
+
 
 module tb_croc_soc #(
     parameter time         ClkPeriod     = 50ns,
@@ -53,8 +57,6 @@ module tb_croc_soc #(
                                            + soc_ctrl_reg_pkg::SOC_CTRL_CORESTATUS_OFFSET;
     localparam bit [31:0] InputImageBaseAddr = croc_pkg::SramBaseAddr + 32'h1000; // 0x10000000 + 0x1000
     localparam bit [31:0] OutputBaseAddr     = InputImageBaseAddr + 32'h1000;      // 0x10002000
-    localparam bit [31:0] CnnBaseAddr = 32'h1A104000;
-    localparam bit [31:0] CnnClassScoresBase = CnnBaseAddr + 32'h20;
     
     /////////////////////////////
     //  Command Line Arguments //
