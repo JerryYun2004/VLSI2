@@ -18,9 +18,9 @@
 #define CNN_OUTPUT_BASE_REG 0x0C
 #define CNN_WEIGHT_BASE_REG 0x10
 
-#define SRAM_BASE        0x1C000000
-#define IMAGE_OFFSET     0x000       // Input image location
-#define OUTPUT_OFFSET    0x400       // Output buffer location
+#define SRAM_BASE        0x10000000
+#define IMAGE_OFFSET     0x1000      // Matches the updated InputImageBaseAddr
+#define OUTPUT_OFFSET    0x1000       // Output buffer location
 
 // Minimal implementation of memcpy for freestanding environments
 void* memcpy(void* dest, const void* src, unsigned int n) {
