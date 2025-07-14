@@ -53,7 +53,9 @@ module tb_croc_soc #(
                                            + soc_ctrl_reg_pkg::SOC_CTRL_CORESTATUS_OFFSET;
     localparam bit [31:0] InputImageBaseAddr = croc_pkg::SramBaseAddr + 32'h1000; // 0x10000000 + 0x1000
     localparam bit [31:0] OutputBaseAddr     = InputImageBaseAddr + 32'h1000;      // 0x10002000
-
+    localparam bit [31:0] CnnBaseAddr = 32'h1A104000;
+    localparam bit [31:0] CnnClassScoresBase = CnnBaseAddr + 32'h20;
+    
     /////////////////////////////
     //  Command Line Arguments //
     /////////////////////////////
@@ -520,11 +522,11 @@ module tb_croc_soc #(
         $display("@%t | [CORE] Wait for end of code...", $time);
         jtag_wait_for_eoc(tb_data);
         
-        $display("@%t | [JTAG] Reading confidence scores from SRAM", $time);
+        $display("@%t | [JTAG] Reading confidence scores from CNN internal registers", $time);
         for (int i = 0; i < 10; i++) begin
-            jtag_read_reg32(OutputBaseAddr + i*4, score_data);
+            jtag_read_reg32(CnnClassScoresBase + i*4, score_data);
             class_scores[i] = score_data[7:0];
-            $display("Class %0d: Confidence = %0d", i, class_scores[i]);
+            $display("Class %0d: Accumulated Confidence = %0d", i, class_scores[i]);
         end
 
         // === Load expected labels for comparison ===
