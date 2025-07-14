@@ -32,6 +32,8 @@ module cnn_top #(
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_OUTPUT_BASE = 32'h1A10_0010;
 
+    logic signed [31:0] class_scores [0:9];
+    
     logic req_q, req_d;
     logic we_q, we_d;
     logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
@@ -83,6 +85,8 @@ module cnn_top #(
     localparam ADDR_WEIGHT_BASE = 32'h10;
     localparam ADDR_CLASS_IDX = 32'h14;
 
+    localparam ADDR_CLASS_SCORES = 32'h20;
+    
     always_comb begin
         rsp_data = '0;
         rsp_err = 1'b0;
@@ -115,7 +119,13 @@ module cnn_top #(
                         ADDR_INPUT_BASE:  rsp_data = input_base_q;
                         ADDR_OUTPUT_BASE: rsp_data = output_base_q;
                         ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
-                        default:          rsp_data = 32'hDEAD_BEEF;
+                        default: begin
+                            if ((addr_q >= ADDR_CLASS_SCORES_BASE) && (addr_q < ADDR_CLASS_SCORES_BASE + 10*4)) begin
+                                rsp_data = class_scores[(addr_q - ADDR_CLASS_SCORES_BASE) >> 2];
+                            end else begin
+                                rsp_data = 32'hDEAD_BEEF;
+                            end
+                        end
                     endcase
                 end
             end
@@ -183,6 +193,9 @@ module cnn_top #(
             state <= IDLE;
             read_addr <= '0;
             write_addr <= '0;
+            for (int i = 0; i < 10; i++) begin
+                class_scores[i] <= 32'd0;
+            end
         end else begin
             state <= next_state;
         end
@@ -211,6 +224,7 @@ module cnn_top #(
                 write_addr = output_base_q + (class_idx_q << 2);
                 user_mem_addr = write_addr;
                 user_mem_write_en = 1;
+                class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
                 next_state = IDLE;
             end
         endcase
