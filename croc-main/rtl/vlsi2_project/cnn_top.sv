@@ -47,6 +47,8 @@ module cnn_top #(
     logic status_reg;
     logic signed [DATA_WIDTH-1:0] weights_reg[0:8];
 
+    logic [3:0] class_idx_q, class_idx_d;
+
     logic [DATA_WIDTH-1:0] pixel_in;
     logic valid_in;
     logic [DATA_WIDTH-1:0] window[0:8];
@@ -66,6 +68,7 @@ module cnn_top #(
     `FF(input_base_q, input_base_d, DEFAULT_INPUT_BASE)
     `FF(output_base_q, output_base_d, DEFAULT_OUTPUT_BASE)
     `FF(start_reg_q, start_reg_d, 1'b0)
+    `FF(class_idx_q, class_idx_d, 4'd0)
 
     assign req_d = sbr_obi_req_i.req;
     assign we_d = sbr_obi_req_i.a.we;
@@ -78,6 +81,7 @@ module cnn_top #(
     localparam ADDR_INPUT_BASE = 32'h08;
     localparam ADDR_OUTPUT_BASE = 32'h0C;
     localparam ADDR_WEIGHT_BASE = 32'h10;
+    localparam ADDR_CLASS_IDX = 32'h14;
 
     always_comb begin
         rsp_data = '0;
@@ -86,6 +90,7 @@ module cnn_top #(
         input_base_d = input_base_q;
         output_base_d = output_base_q;
         start_reg_d = start_reg_q;
+        class_idx_d = class_idx_q;
 
         if (req_q) begin
             if (we_q) begin
@@ -96,6 +101,7 @@ module cnn_top #(
                         ADDR_CTRL:        start_reg_d = 1'b1;
                         ADDR_INPUT_BASE:  input_base_d = wdata_q;
                         ADDR_OUTPUT_BASE: output_base_d = wdata_q;
+                        ADDR_CLASS_IDX:   class_idx_d  = wdata_q[3:0];
                         default:          rsp_err = 1'b1;
                     endcase
                 end
@@ -108,6 +114,7 @@ module cnn_top #(
                         ADDR_STATUS:      rsp_data = status_reg;
                         ADDR_INPUT_BASE:  rsp_data = input_base_q;
                         ADDR_OUTPUT_BASE: rsp_data = output_base_q;
+                        ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
                         default:          rsp_data = 32'hDEAD_BEEF;
                     endcase
                 end
@@ -201,6 +208,7 @@ module cnn_top #(
             end
             PROCESS: if (relu_valid_out) next_state = WRITE;
             WRITE: begin
+                write_addr = output_base_q + (class_idx_q << 2);
                 user_mem_addr = write_addr;
                 user_mem_write_en = 1;
                 next_state = IDLE;
