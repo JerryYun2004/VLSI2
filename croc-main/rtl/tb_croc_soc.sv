@@ -526,7 +526,7 @@ module tb_croc_soc #(
         
         $display("@%t | [JTAG] Reading confidence scores from CNN internal registers", $time);
         for (int i = 0; i < 10; i++) begin
-            jtag_read_reg32(CnnClassScoresBase + i*4, score_data);
+            jtag_read_reg32(user_pkg::CnnClassScoresBase + i*4, score_data);
             class_scores[i] = score_data[7:0];
             $display("Class %0d: Accumulated Confidence = %0d", i, class_scores[i]);
         end
