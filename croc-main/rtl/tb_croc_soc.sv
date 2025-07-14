@@ -51,8 +51,9 @@ module tb_croc_soc #(
                                            + soc_ctrl_reg_pkg::SOC_CTRL_FETCHEN_OFFSET;
     localparam bit [31:0] CoreStatusAddr = croc_pkg::SocCtrlAddrOffset
                                            + soc_ctrl_reg_pkg::SOC_CTRL_CORESTATUS_OFFSET;
-    localparam bit [31:0] InputImageBaseAddr = 32'h1C000000;
-    
+    localparam bit [31:0] InputImageBaseAddr = croc_pkg::SramBaseAddr + 32'h1000; // 0x10000000 + 0x1000
+    localparam bit [31:0] OutputBaseAddr     = InputImageBaseAddr + 32'h1000;      // 0x10002000
+
     /////////////////////////////
     //  Command Line Arguments //
     /////////////////////////////
@@ -503,7 +504,7 @@ module tb_croc_soc #(
         // Write image into SRAM via JTAG
         for (int i = 0; i < 784; i += 4) begin
             word = {input_image_mem[i+3], input_image_mem[i+2], input_image_mem[i+1], input_image_mem[i]};
-            jtag_write_reg32(32'h1C000000 + i, word, 0);
+            jtag_write_reg32(InputImageBaseAddr + i, word, 0);
         end
 
         $display("@%t | [CORE] Start fetching instructions", $time);
@@ -521,7 +522,7 @@ module tb_croc_soc #(
         
         $display("@%t | [JTAG] Reading confidence scores from SRAM", $time);
         for (int i = 0; i < 10; i++) begin
-            jtag_read_reg32(32'h1C000400 + i, score_data);
+            jtag_read_reg32(OutputBaseAddr + i*4, score_data);
             class_scores[i] = score_data[7:0];
             $display("Class %0d: Confidence = %0d", i, class_scores[i]);
         end
