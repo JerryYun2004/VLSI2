@@ -21,7 +21,7 @@
 #define SRAM_BASE        0x10000000
 #define IMAGE_OFFSET     0x1000      // Matches the updated InputImageBaseAddr
 #define OUTPUT_OFFSET    0x1000       // Output buffer location
-#define USER_RETURN_CODE_ADDR 0x20003000
+// #define USER_RETURN_CODE_ADDR 0x20003000
 
 // Minimal implementation of memcpy for freestanding environments
 void* memcpy(void* dest, const void* src, unsigned int n) {
@@ -83,7 +83,7 @@ int main() {
     printf("Execution cycles: CNN compute %u, Output processing %u\n", t1 - t0, t2 - t1);
 
     // Set return code in designated memory (user-defined)
-    *reg32(USER_RETURN_CODE_ADDR, 0x0) = 0xDEADB000 | (max_index & 0xF);
+   // *reg32(USER_RETURN_CODE_ADDR, 0x0) = 0xDEADB000 | (max_index & 0xF);
 
     uart_write_flush();
     return 0;
