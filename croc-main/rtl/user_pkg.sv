@@ -28,6 +28,8 @@ import croc_pkg::*;
 
   localparam bit [31:0] UserCnnAddrOffset   = croc_pkg::UserBaseAddr + UserRomAddrRange; // 32'h2000_1000;
   localparam bit [31:0] UserCnnAddrRange    = 32'h0001_4000;          // ~80 KB
+  localparam bit [31:0] CnnBaseAddr = UserCnnAddrOffset; // 0x2000_1000
+  localparam bit [31:0] CnnClassScoresBase = CnnBaseAddr + 32'h20;
 
   // Define Return Code Register within CNN address space
   localparam bit [31:0] UserReturnCodeAddr = UserCnnAddrOffset + 32'h00002000; // 0x20003000
