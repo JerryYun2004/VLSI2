@@ -11,6 +11,7 @@
 #define CNN_OUTPUT_BASE_REG    0x0C
 #define CNN_WEIGHT_BASE_REG    0x10
 #define CNN_CLASS_IDX_REG      0x14   // <-- New register for class index
+#define CNN_CLASS_SCORES_BASE 0x20
 
 #define SRAM_BASE              0x10000000
 #define IMAGE_OFFSET           0x1000      // Matches InputImageBaseAddr
@@ -57,11 +58,11 @@ int main() {
 
     asm volatile("csrr %0, mcycle" : "=r"(t1)::"memory");
 
-    printf("Reading output results per class:\n");
+    printf("Reading output results per class (from CNN internal scores):\n");
     for (int class_idx = 0; class_idx < 10; class_idx++) {
-        uint32_t addr = SRAM_BASE + OUTPUT_OFFSET + (class_idx * 4);
-        uint8_t score = *((volatile uint8_t*)addr);
-        printf("Class %d score: %d\n", class_idx, score);
+        uint32_t addr = CNN_BASE_ADDR + CNN_CLASS_SCORES_BASE + (class_idx * 4);
+        uint32_t score = *reg32(addr, 0);
+        printf("Class %d accumulated score: %u\n", class_idx, score);
     }
 
     asm volatile("csrr %0, mcycle" : "=r"(t2)::"memory");
