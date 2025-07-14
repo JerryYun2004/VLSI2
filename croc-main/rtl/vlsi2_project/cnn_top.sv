@@ -221,10 +221,8 @@ module cnn_top #(
             end
             PROCESS: if (relu_valid_out) next_state = WRITE;
             WRITE: begin
-                write_addr = output_base_q + (class_idx_q << 2);
-                user_mem_addr = write_addr;
-                user_mem_write_en = 1;
                 class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
+                $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores[class_idx_q]);
                 next_state = IDLE;
             end
         endcase
