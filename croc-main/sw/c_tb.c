@@ -8,14 +8,12 @@
 #define CNN_CTRL_REG           0x00
 #define CNN_STATUS_REG         0x04
 #define CNN_INPUT_BASE_REG     0x08
-#define CNN_OUTPUT_BASE_REG    0x0C
 #define CNN_WEIGHT_BASE_REG    0x10
 #define CNN_CLASS_IDX_REG      0x14   // <-- New register for class index
 #define CNN_CLASS_SCORES_BASE 0x20
 
 #define SRAM_BASE              0x10000000
 #define IMAGE_OFFSET           0x1000      // Matches InputImageBaseAddr
-#define OUTPUT_OFFSET          0x2000      // Distinct region to store outputs for all classes
 
 void* memcpy(void* dest, const void* src, unsigned int n) {
     char* d = (char*)dest;
@@ -41,7 +39,6 @@ int main() {
     }
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG)  = SRAM_BASE + IMAGE_OFFSET;
-    *reg32(CNN_BASE_ADDR, CNN_OUTPUT_BASE_REG) = SRAM_BASE + OUTPUT_OFFSET;
 
     asm volatile("csrr %0, mcycle" : "=r"(t0)::"memory");
 
