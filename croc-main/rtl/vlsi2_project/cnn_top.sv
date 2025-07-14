@@ -29,11 +29,10 @@ module cnn_top #(
     output logic user_mem_write_en
 );
 
-    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1A10_0000;
-    localparam logic [ADDR_WIDTH-1:0] DEFAULT_OUTPUT_BASE = 32'h1A10_0010;
+    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_1000;
 
     logic signed [31:0] class_scores [0:9];
-    
+
     logic req_q, req_d;
     logic we_q, we_d;
     logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
@@ -44,7 +43,6 @@ module cnn_top #(
     logic rvalid;
 
     logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
-    logic [ADDR_WIDTH-1:0] output_base_q, output_base_d;
     logic start_reg_q, start_reg_d;
     logic status_reg;
     logic signed [DATA_WIDTH-1:0] weights_reg[0:8];
@@ -60,7 +58,6 @@ module cnn_top #(
     logic relu_valid_out, relu_ready_out;
 
     logic [ADDR_WIDTH-1:0] read_addr;
-    logic [ADDR_WIDTH-1:0] write_addr;
 
     `FF(req_q, req_d, '0)
     `FF(we_q, we_d, '0)
@@ -68,7 +65,6 @@ module cnn_top #(
     `FF(id_q, id_d, '0)
     `FF(wdata_q, wdata_d, '0)
     `FF(input_base_q, input_base_d, DEFAULT_INPUT_BASE)
-    `FF(output_base_q, output_base_d, DEFAULT_OUTPUT_BASE)
     `FF(start_reg_q, start_reg_d, 1'b0)
     `FF(class_idx_q, class_idx_d, 4'd0)
 
@@ -81,18 +77,16 @@ module cnn_top #(
     localparam ADDR_CTRL = 32'h00;
     localparam ADDR_STATUS = 32'h04;
     localparam ADDR_INPUT_BASE = 32'h08;
-    localparam ADDR_OUTPUT_BASE = 32'h0C;
     localparam ADDR_WEIGHT_BASE = 32'h10;
     localparam ADDR_CLASS_IDX = 32'h14;
 
     localparam ADDR_CLASS_SCORES = 32'h20;
-    
+
     always_comb begin
         rsp_data = '0;
         rsp_err = 1'b0;
         rvalid = 1'b0;
         input_base_d = input_base_q;
-        output_base_d = output_base_q;
         start_reg_d = start_reg_q;
         class_idx_d = class_idx_q;
 
@@ -104,7 +98,6 @@ module cnn_top #(
                     unique case (addr_q)
                         ADDR_CTRL:        start_reg_d = 1'b1;
                         ADDR_INPUT_BASE:  input_base_d = wdata_q;
-                        ADDR_OUTPUT_BASE: output_base_d = wdata_q;
                         ADDR_CLASS_IDX:   class_idx_d  = wdata_q[3:0];
                         default:          rsp_err = 1'b1;
                     endcase
@@ -117,11 +110,10 @@ module cnn_top #(
                     unique case (addr_q)
                         ADDR_STATUS:      rsp_data = status_reg;
                         ADDR_INPUT_BASE:  rsp_data = input_base_q;
-                        ADDR_OUTPUT_BASE: rsp_data = output_base_q;
                         ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
                         default: begin
-                            if ((addr_q >= ADDR_CLASS_SCORES_BASE) && (addr_q < ADDR_CLASS_SCORES_BASE + 10*4)) begin
-                                rsp_data = class_scores[(addr_q - ADDR_CLASS_SCORES_BASE) >> 2];
+                            if ((addr_q >= ADDR_CLASS_SCORES) && (addr_q < ADDR_CLASS_SCORES + 10*4)) begin
+                                rsp_data = class_scores[(addr_q - ADDR_CLASS_SCORES) >> 2];
                             end else begin
                                 rsp_data = 32'hDEAD_BEEF;
                             end
@@ -146,10 +138,10 @@ module cnn_top #(
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
     state_t state, next_state;
 
-    assign mgr_obi_req_o.req = (state == READ || state == WRITE);
-    assign mgr_obi_req_o.a.we = (state == WRITE);
-    assign mgr_obi_req_o.a.addr = (state == READ) ? read_addr : write_addr;
-    assign mgr_obi_req_o.a.wdata = user_mem_data_out;
+    assign mgr_obi_req_o.req = (state == READ);
+    assign mgr_obi_req_o.a.we = 1'b0;
+    assign mgr_obi_req_o.a.addr = read_addr;
+    assign mgr_obi_req_o.a.wdata = '0;
     assign mgr_obi_req_o.a.be = '1;
     assign mgr_obi_req_o.a.aid = '0;
 
@@ -192,7 +184,6 @@ module cnn_top #(
         if (!rst_ni) begin
             state <= IDLE;
             read_addr <= '0;
-            write_addr <= '0;
             for (int i = 0; i < 10; i++) begin
                 class_scores[i] <= 32'd0;
             end
@@ -208,7 +199,7 @@ module cnn_top #(
         user_mem_write_en = 0;
         user_mem_addr = 0;
         pixel_in = 0;
-        user_mem_data_out = pooled_out[DATA_WIDTH-1:0];
+        user_mem_data_out = '0;
 
         case (state)
             IDLE:    if (start_reg_q) next_state = READ;
