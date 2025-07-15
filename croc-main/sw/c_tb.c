@@ -48,7 +48,16 @@ int main() {
 
         *reg32(CNN_BASE_ADDR, CNN_CTRL_REG) = 1;
 
-        while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0);
+        uint32_t timeout = 1000000;
+        while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0 && timeout--) {
+            // Optional short delay to reduce stress on memory bus
+            for (volatile int i = 0; i < 1000; i++); 
+        }
+
+        if (timeout == 0) {
+            printf("Error: CNN processing timeout for class index %d\n", class_idx);
+            break;
+        }
 
         printf("Class %d: Completed processing.\n", class_idx);
     }
