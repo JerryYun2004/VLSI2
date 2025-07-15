@@ -125,6 +125,7 @@ module cnn_top #(
 
         if (state == IDLE && start_reg_q) begin
             start_reg_d = 1'b0;
+            read_addr = input_base_q; // Initialize read address when starting
         end
     end
 
@@ -202,12 +203,16 @@ module cnn_top #(
         user_mem_data_out = '0;
 
         case (state)
-            IDLE:    if (start_reg_q) next_state = READ;
+            IDLE: if (start_reg_q) begin
+                read_addr = input_base_q;
+                next_state = READ;
+            end
             READ: begin
                 user_mem_addr = read_addr;
                 user_mem_read_en = 1;
                 pixel_in = user_mem_data_in;
                 valid_in = 1;
+                read_addr = read_addr + 1; // increment address
                 next_state = PROCESS;
             end
             PROCESS: if (relu_valid_out) next_state = WRITE;
