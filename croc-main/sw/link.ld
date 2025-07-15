@@ -21,10 +21,10 @@ SECTIONS
 
   .text._start 0x10000000 : { *(.text._start) } >SRAM
   .text : { *(.text) *(.text.*) } >SRAM
-  .misc : { *(.sdata) *(.*) } >SRAM
+  .misc : { *(.sdata) *(.sbss) } >SRAM
   
-  __global_pointer$ = ADDR(.misc)  + SIZEOF(.misc) / 2; 
-  __stack_pointer$ = ORIGIN(SRAM) + LENGTH(SRAM) - 4;
+  __global_pointer$ = ADDR(.misc)  + SIZEOF(.misc) / 2;
+  __stack_pointer$  = ORIGIN(SRAM) + LENGTH(SRAM) - 16;  /* 16-byte alignment */
 
-  status  = 0x03000008;
+  status = 0x03000008;
 }
