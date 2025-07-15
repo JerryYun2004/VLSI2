@@ -4,7 +4,7 @@
 #include "util.h"
 #include "config.h"
 
-#define CNN_BASE_ADDR          0x2000_1000
+#define CNN_BASE_ADDR          0x20001000
 #define CNN_CTRL_REG           0x00
 #define CNN_STATUS_REG         0x04
 #define CNN_INPUT_BASE_REG     0x08
