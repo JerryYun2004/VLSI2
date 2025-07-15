@@ -46,6 +46,7 @@ module cnn_top #(
     logic start_reg_q, start_reg_d;
     logic status_reg;
     logic signed [DATA_WIDTH-1:0] weights_reg[0:8];
+    logic [ADDR_WIDTH-1:0] read_addr_q, read_addr_d;
 
     logic [3:0] class_idx_q, class_idx_d;
 
@@ -141,7 +142,7 @@ module cnn_top #(
 
     assign mgr_obi_req_o.req = (state == READ);
     assign mgr_obi_req_o.a.we = 1'b0;
-    assign mgr_obi_req_o.a.addr = read_addr;
+    assign mgr_obi_req_o.a.addr = read_addr_q;
     assign mgr_obi_req_o.a.wdata = '0;
     assign mgr_obi_req_o.a.be = '1;
     assign mgr_obi_req_o.a.aid = '0;
@@ -184,12 +185,13 @@ module cnn_top #(
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             state <= IDLE;
-            read_addr <= '0;
+            read_addr_q <= '0;
             for (int i = 0; i < 10; i++) begin
                 class_scores[i] <= 32'd0;
             end
         end else begin
             state <= next_state;
+            read_addr_q <= read_addr_d;
         end
     end
 
@@ -201,18 +203,19 @@ module cnn_top #(
         user_mem_addr = 0;
         pixel_in = 0;
         user_mem_data_out = '0;
-
+        read_addr_d = read_addr_q;   // default
+    
         case (state)
             IDLE: if (start_reg_q) begin
-                read_addr = input_base_q;
+                read_addr_d = input_base_q;
                 next_state = READ;
             end
             READ: begin
-                user_mem_addr = read_addr;
+                user_mem_addr = read_addr_q;
                 user_mem_read_en = 1;
                 pixel_in = user_mem_data_in;
                 valid_in = 1;
-                read_addr = read_addr + 1; // increment address
+                read_addr_d = read_addr_q + 1;
                 next_state = PROCESS;
             end
             PROCESS: if (relu_valid_out) next_state = WRITE;
