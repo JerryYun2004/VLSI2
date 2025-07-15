@@ -16,7 +16,9 @@ _start:
   .option pop
 
   # Stack pointer
-  la      x2, __stack_pointer$
+  # la x2, __stack_pointer$
+  lui x2, %hi(__stack_pointer$)
+  addi x2, x2, %lo(__stack_pointer$)
 
   # Reset vector
   li      x1, 0
