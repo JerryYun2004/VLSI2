@@ -216,7 +216,13 @@ module cnn_top #(
                 pixel_in = user_mem_data_in;
                 valid_in = 1;
                 read_addr_d = read_addr_q + 1;
-                next_state = PROCESS;
+            
+                if (window_valid) begin
+                    $display("[CNN] Window valid at read_addr 0x%0h", read_addr_q);
+                    next_state = PROCESS;
+                end else begin
+                    next_state = READ;
+                end
             end
             PROCESS: begin
                 if (relu_valid_out) begin
