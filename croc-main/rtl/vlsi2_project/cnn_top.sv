@@ -218,7 +218,14 @@ module cnn_top #(
                 read_addr_d = read_addr_q + 1;
                 next_state = PROCESS;
             end
-            PROCESS: if (relu_valid_out) next_state = WRITE;
+            PROCESS: begin
+                if (relu_valid_out) begin
+                    $display("[CNN] PROCESS: relu_valid_out high, moving to WRITE.");
+                    next_state = WRITE;
+                end else begin
+                    $display("[CNN] PROCESS: waiting for relu_valid_out...");
+                end
+            end
             WRITE: begin
                 class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores[class_idx_q]);
