@@ -24,7 +24,7 @@ SECTIONS
   .misc : { *(.sdata) *(.*) } >SRAM
   
   __global_pointer$ = ADDR(.misc)  + SIZEOF(.misc) / 2; 
-  __stack_pointer$  = ORIGIN(SRAM) + LENGTH(SRAM);
+  __stack_pointer$ = ORIGIN(SRAM) + LENGTH(SRAM) - 4;
 
   status  = 0x03000008;
 }
