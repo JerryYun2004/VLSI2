@@ -5,7 +5,7 @@
 // Authors:
 // - Philippe Sauter <phsauter@iis.ee.ethz.ch>
 
-define TRACE_WAVE
+`define TRACE_WAVE
 import user_pkg::*;
 import croc_pkg::*;
 import soc_ctrl_reg_pkg::*;
@@ -433,13 +433,13 @@ module tb_croc_soc #(
     ////////////
     //  DUT   //
     ////////////
-    ifdef TARGET_NETLIST_YOSYS
+    `ifdef TARGET_NETLIST_YOSYS
         \croc_soc$croc_chip.i_croc_soc i_croc_soc (
-    else
+    `else
         croc_soc #(
             .GpioCount ( GpioCount  )
         ) i_croc_soc (
-    endif
+    `endif
         .clk_i         ( clk        ),
         .rst_ni        ( rst_n      ),
         .ref_clk_i     ( ref_clk    ),
@@ -482,10 +482,10 @@ module tb_croc_soc #(
     initial begin
         $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
         // configure VCD dump
-        ifdef TRACE_WAVE
-        $dumpfile("croc.vcd");
-        $dumpvars(1,i_croc_soc);
-        endif
+        `ifdef TRACE_WAVE
+            $dumpfile("croc.vcd");
+            $dumpvars(1,i_croc_soc);
+        `endif
 
         uart_rx_i  = 1'b0;
         fetch_en_i = 1'b0;
@@ -549,10 +549,10 @@ module tb_croc_soc #(
         
         // finish simulation
         repeat(50) @(posedge clk);
-        ifdef TRACE_WAVE
-        $dumpflush;
-        endif
-        $finish();
+        `ifdef TRACE_WAVE
+            $dumpflush;
+            endif
+        `$finish();
     end
 
 endmodule
