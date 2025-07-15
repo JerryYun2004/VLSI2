@@ -56,8 +56,6 @@ int main() {
         } else {
             printf("Class %d: Completed processing.\n", class_idx);
         }
-
-        printf("Class %d: Completed processing.\n", class_idx);
     }
 
     asm volatile("csrr %0, mcycle" : "=r"(t1)::"memory");
