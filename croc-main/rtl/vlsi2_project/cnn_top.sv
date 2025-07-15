@@ -223,9 +223,9 @@ module cnn_top #(
         if (!rst_ni) begin
             status_reg <= 1'b0;
         end else if (state == WRITE) begin
-            status_reg <= 1'b1;
-        end else if (state == IDLE) begin
-            status_reg <= 1'b0;
+            status_reg <= 1'b1; // set when operation finishes
+        end else if (req_q && we_q && addr_q == ADDR_CTRL) begin
+            status_reg <= 1'b0; // clear on CPU start command
         end
     end
 
