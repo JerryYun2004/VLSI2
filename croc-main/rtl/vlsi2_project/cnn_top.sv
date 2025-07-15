@@ -123,10 +123,10 @@ module cnn_top #(
             end
         end
 
-        if (state == IDLE && start_reg_q) begin
-            start_reg_d = 1'b0;
-            read_addr = input_base_q; // Initialize read address when starting
-        end
+        //if (state == IDLE && start_reg_q) begin
+        //    start_reg_d = 1'b0;
+        //    read_addr = input_base_q; // Initialize read address when starting
+        //end
     end
 
     assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
