@@ -41,7 +41,7 @@ _eoc:
   wfi
 
 # Define the stack pointer storage in a small data section
-.section .sdata
+.section .bss
 .globl __stack_pointer$
 __stack_pointer$:
     .word 0
