@@ -39,9 +39,3 @@ _eoc:
   la      t0, status
   sw      a0, 0(t0)
   wfi
-
-# Define the stack pointer storage in a small data section
-.section .bss
-.globl __stack_pointer$
-__stack_pointer$:
-    .word 0
