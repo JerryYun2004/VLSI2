@@ -35,3 +35,8 @@ _eoc:
   la      t0, status
   sw      a0, 0(t0)
   wfi
+
+.section .sdata
+.globl __stack_pointer$
+__stack_pointer$:
+    .word 0
