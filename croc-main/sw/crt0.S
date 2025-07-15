@@ -14,8 +14,10 @@ _start:
   .option norelax
   la      x3, __global_pointer$
   .option pop
+
   # Stack pointer
   la      x2, __stack_pointer$
+
   # Reset vector
   li      x1, 0
   li      x4, 0
@@ -30,12 +32,15 @@ _start:
   li      x13, 0
   li      x14, 0
   li      x15, 0
+
   call main
+
 _eoc:
   la      t0, status
   sw      a0, 0(t0)
   wfi
 
+# Define the stack pointer storage in a small data section
 .section .sdata
 .globl __stack_pointer$
 __stack_pointer$:
