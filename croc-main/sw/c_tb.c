@@ -13,7 +13,7 @@
 #define CNN_CLASS_SCORES_BASE 0x20
 
 #define SRAM_BASE              0x10000000
-#define IMAGE_OFFSET           0x1000      // Matches InputImageBaseAddr
+#define IMAGE_OFFSET           0x0700      // Matches InputImageBaseAddr
 
 void* memcpy(void* dest, const void* src, unsigned int n) {
     char* d = (char*)dest;
