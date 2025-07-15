@@ -551,8 +551,8 @@ module tb_croc_soc #(
         repeat(50) @(posedge clk);
         `ifdef TRACE_WAVE
             $dumpflush;
-            endif
-        `$finish();
+        `endif
+        $finish();
     end
 
 endmodule
