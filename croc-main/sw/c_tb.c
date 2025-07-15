@@ -15,6 +15,9 @@
 #define SRAM_BASE              0x10000000
 #define IMAGE_OFFSET           0x0700      // Matches InputImageBaseAddr
 
+#define USER_FINISH_ADDR 0x03000008
+#define USER_FINISH_VALUE 0xCAFEDEAD
+
 void* memcpy(void* dest, const void* src, unsigned int n) {
     char* d = (char*)dest;
     const char* s = (const char*)src;
@@ -71,5 +74,5 @@ int main() {
     printf("Total execution cycles: CNN runs %u, Output reading %u\n", t1 - t0, t2 - t1);
 
     uart_write_flush();
-    return 0;
+    return USER_FINISH_VALUE;
 }
