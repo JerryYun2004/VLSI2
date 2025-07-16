@@ -52,14 +52,16 @@ int main() {
 
         *reg32(CNN_BASE_ADDR, CNN_CTRL_REG) = 1;
 
-        uint32_t timeout = 1000000;
-        while ((*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0) && --timeout);
-        
-        if (timeout == 0) {
-            printf("Error: CNN processing timeout for class index %d\n", class_idx);
-        } else {
-            printf("Class %d: Completed processing.\n", class_idx);
-        }
+        //uint32_t timeout = 1000000;
+        //while ((*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0) && --timeout);
+        while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0);
+        printf("Class %d: Completed processing.\n", class_idx);
+
+        //if (timeout == 0) {
+        //    printf("Error: CNN processing timeout for class index %d\n", class_idx);
+        //} else {
+        //    printf("Class %d: Completed processing.\n", class_idx);
+        //}
     }
 
     asm volatile("csrr %0, mcycle" : "=r"(t1)::"memory");
