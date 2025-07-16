@@ -99,6 +99,8 @@ module cnn_top #(
             if (we_q) begin
                 if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
                     weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
+                    $display("[CNN] Weight[%0d] loaded with value %0d",
+                    (addr_q - ADDR_WEIGHT_BASE) >> 2, wdata_q[DATA_WIDTH-1:0]);
                 end else begin
                     unique case (addr_q)
                         ADDR_CTRL: begin
