@@ -204,10 +204,13 @@ module cnn_top #(
         pixel_in = 0;
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;   // default
+    
         $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
-         if (state == IDLE && start_reg_q) begin
+    
+        if (state == IDLE && start_reg_q) begin
             start_reg_d = 1'b0;
         end
+    
         case (state)
             IDLE: if (start_reg_q) begin
                 $display("[CNN] FSM start: Moving to READ");
@@ -215,6 +218,7 @@ module cnn_top #(
                 read_addr_d = input_base_q;
                 next_state = READ;
             end
+    
             READ: begin
                 $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
                 user_mem_addr = read_addr_q;
@@ -224,21 +228,26 @@ module cnn_top #(
                 read_addr_d = read_addr_q + 1;
             
                 if (window_valid) begin
-                    $display("[CNN] Window valid at read_addr 0x%0h", read_addr_q);
+                    $display("[CNN] Window Valid! read_addr=0x%0h", read_addr_q);
+                    $display("[CNN] Convolution output: conv_out=%0d", conv_out);
                     next_state = PROCESS;
                 end else begin
                     next_state = READ;
                 end
             end
+    
             PROCESS: begin
                 if (relu_valid_out) begin
+                    $display("[CNN] ReLU Output: relu_out_data=%0d", relu_out_data);
                     $display("[CNN] PROCESS: relu_valid_out high, moving to WRITE.");
                     next_state = WRITE;
                 end else begin
                     $display("[CNN] PROCESS: waiting for relu_valid_out...");
                 end
             end
+    
             WRITE: begin
+                $display("[CNN] Pooled Output: pooled_out=%0d", pooled_out);
                 $display("[CNN] WRITE: class_idx=%0d, score=%0d", class_idx_q, pooled_out);
                 class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores[class_idx_q]);
@@ -249,6 +258,7 @@ module cnn_top #(
         if (status_reg)
             $display("[CNN] Status_reg set!");
     end
+    
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
