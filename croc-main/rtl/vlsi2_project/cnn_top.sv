@@ -31,7 +31,7 @@ module cnn_top #(
 
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0900;
 
-    logic signed [31:0] class_scores [0:9];
+    logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
 
     logic req_q, req_d;
     logic we_q, we_d;
@@ -88,8 +88,9 @@ module cnn_top #(
         rsp_err = 1'b0;
         rvalid = 1'b0;
         input_base_d = input_base_q;
-        start_reg_d = start_reg_q;  // default retain
-        class_idx_d = class_idx_q;
+        start_reg_d  = start_reg_q;  // retain by default
+        class_idx_d  = class_idx_q;
+        class_scores_d = class_scores_q;  // default retain
     
         if (req_q) begin
             $display("[CNN] Write access: we_q=%0b addr_q=0x%0h wdata_q=0x%0h", we_q, addr_q, wdata_q);
@@ -99,7 +100,7 @@ module cnn_top #(
                 end else begin
                     unique case (addr_q)
                         ADDR_CTRL: begin
-                            start_reg_d = 1'b1; // <-- Only set here!
+                            start_reg_d = 1'b1;
                             $display("[CNN] Received start command at ADDR_CTRL, start_reg_d=1");
                         end
                         ADDR_INPUT_BASE: input_base_d = wdata_q;
@@ -118,7 +119,7 @@ module cnn_top #(
                         ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
                         default: begin
                             if ((addr_q >= ADDR_CLASS_SCORES) && (addr_q < ADDR_CLASS_SCORES + 10*4)) begin
-                                rsp_data = class_scores[(addr_q - ADDR_CLASS_SCORES) >> 2];
+                                rsp_data = class_scores_q[(addr_q - ADDR_CLASS_SCORES) >> 2];  // fixed
                             end else begin
                                 rsp_data = 32'hDEAD_BEEF;
                             end
@@ -127,11 +128,6 @@ module cnn_top #(
                 end
             end
         end
-
-        //if (state == IDLE && start_reg_q) begin
-        //    start_reg_d = 1'b0;
-        //    read_addr = input_base_q; // Initialize read address when starting
-        //end
     end
 
     assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
@@ -190,22 +186,20 @@ module cnn_top #(
         if (!rst_ni) begin
             state <= IDLE;
             read_addr_q <= '0;
-            start_reg_q <= 1'b0;  // <-- reset start_reg_q
+            start_reg_q <= 1'b0;
             for (int i = 0; i < 10; i++) begin
-                class_scores[i] <= 32'd0;
+                class_scores_q[i] <= 32'd0;
             end
         end else begin
             state <= next_state;
             read_addr_q <= read_addr_d;
-    
-            // Bonus fix: clear start_reg_q after triggering FSM
-            if (state == IDLE && start_reg_q) begin
-                start_reg_q <= 1'b0;
-            end else begin
-                start_reg_q <= start_reg_d;
+            start_reg_q <= start_reg_d;
+            for (int i = 0; i < 10; i++) begin
+                class_scores_q[i] <= class_scores_d[i];
             end
         end
     end
+
 
 
    always_comb begin
@@ -217,6 +211,7 @@ module cnn_top #(
         pixel_in = 0;
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;
+        class_scores_d = class_scores_q;
     
         case (state)
             IDLE: begin
@@ -224,9 +219,10 @@ module cnn_top #(
                     $display("[CNN] FSM start: Moving to READ");
                     read_addr_d = input_base_q;
                     next_state = READ;
+                    start_reg_d = 1'b0;  // clear start_reg_q after start
                 end
             end
-            
+
             READ: begin
                 $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
                 user_mem_addr = read_addr_q;
@@ -257,8 +253,8 @@ module cnn_top #(
             WRITE: begin
                 $display("[CNN] Pooled Output: pooled_out=%0d", pooled_out);
                 $display("[CNN] WRITE: class_idx=%0d, score=%0d", class_idx_q, pooled_out);
-                class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
-                $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores[class_idx_q]);
+                class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
+                $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores_d[class_idx_q]);
                 next_state = IDLE;
             end
         endcase
