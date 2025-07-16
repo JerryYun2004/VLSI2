@@ -88,9 +88,9 @@ module cnn_top #(
         rsp_err = 1'b0;
         rvalid = 1'b0;
         input_base_d = input_base_q;
-        start_reg_d = start_reg_q;
+        start_reg_d = start_reg_q;  // default retain
         class_idx_d = class_idx_q;
-
+    
         if (req_q) begin
             $display("[CNN] Write access: we_q=%0b addr_q=0x%0h wdata_q=0x%0h", we_q, addr_q, wdata_q);
             if (we_q) begin
@@ -99,12 +99,12 @@ module cnn_top #(
                 end else begin
                     unique case (addr_q)
                         ADDR_CTRL: begin
-                            start_reg_d = 1'b1;
+                            start_reg_d = 1'b1; // <-- Only set here!
                             $display("[CNN] Received start command at ADDR_CTRL, start_reg_d=1");
                         end
-                        ADDR_INPUT_BASE:  input_base_d = wdata_q;
-                        ADDR_CLASS_IDX:   class_idx_d  = wdata_q[3:0];
-                        default:          rsp_err = 1'b1;
+                        ADDR_INPUT_BASE: input_base_d = wdata_q;
+                        ADDR_CLASS_IDX:  class_idx_d  = wdata_q[3:0];
+                        default: rsp_err = 1'b1;
                     endcase
                 end
             end else begin
@@ -190,14 +190,23 @@ module cnn_top #(
         if (!rst_ni) begin
             state <= IDLE;
             read_addr_q <= '0;
+            start_reg_q <= 1'b0;  // <-- reset start_reg_q
             for (int i = 0; i < 10; i++) begin
                 class_scores[i] <= 32'd0;
             end
         end else begin
             state <= next_state;
             read_addr_q <= read_addr_d;
+    
+            // Bonus fix: clear start_reg_q after triggering FSM
+            if (state == IDLE && start_reg_q) begin
+                start_reg_q <= 1'b0;
+            end else begin
+                start_reg_q <= start_reg_d;
+            end
         end
     end
+
 
    always_comb begin
         next_state = state;
@@ -207,15 +216,12 @@ module cnn_top #(
         user_mem_addr = 0;
         pixel_in = 0;
         user_mem_data_out = '0;
-        read_addr_d = read_addr_q;   // default
-    
-        // $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
+        read_addr_d = read_addr_q;
     
         case (state)
             IDLE: begin
                 if (start_reg_q) begin
                     $display("[CNN] FSM start: Moving to READ");
-                    start_reg_d = 1'b0;
                     read_addr_d = input_base_q;
                     next_state = READ;
                 end
