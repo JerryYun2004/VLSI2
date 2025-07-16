@@ -211,18 +211,16 @@ module cnn_top #(
     
         // $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
     
-        if (state == IDLE && start_reg_q) begin
-            start_reg_d = 1'b0;
-        end
-    
         case (state)
-            IDLE: if (start_reg_q) begin
-                $display("[CNN] FSM start: Moving to READ");
-                start_reg_d = 1'b0;  // Clear start_reg after triggering
-                read_addr_d = input_base_q;
-                next_state = READ;
+            IDLE: begin
+                if (start_reg_q) begin
+                    $display("[CNN] FSM start: Moving to READ");
+                    start_reg_d = 1'b0;
+                    read_addr_d = input_base_q;
+                    next_state = READ;
+                end
             end
-    
+            
             READ: begin
                 $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
                 user_mem_addr = read_addr_q;
