@@ -74,5 +74,6 @@ int main() {
     printf("Total execution cycles: CNN runs %u, Output reading %u\n", t1 - t0, t2 - t1);
 
     uart_write_flush();
+    printf("CNN processing completed, writing return code.\n");
     return USER_FINISH_VALUE;
 }
