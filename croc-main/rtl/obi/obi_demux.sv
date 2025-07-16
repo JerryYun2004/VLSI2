@@ -57,6 +57,10 @@ module obi_demux #(
         mgr_ports_req_o[sbr_port_select_i].req = sbr_port_req_i.req;
         mgr_ports_req_o[sbr_port_select_i].a   = sbr_port_req_i.a;
         sbr_port_gnt                           = mgr_ports_rsp_i[sbr_port_select_i].gnt;
+        // ✅ ADD DEBUG HERE
+        if (sbr_port_req_i.req) begin
+          $display("[DEMUX] Incoming request to addr=0x%0h, port_select=%0d", sbr_port_req_i.a.addr, sbr_port_select_i);
+        end
       end
     end
 
