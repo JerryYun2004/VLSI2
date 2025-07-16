@@ -214,17 +214,18 @@ module cnn_top #(
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;
         class_scores_d = class_scores_q;
+        start_reg_d = start_reg_q; // default retain
     
         case (state)
             IDLE: begin
-                if (start_reg_q) begin
+                if (start_reg_set) begin
                     $display("[CNN] FSM start: Moving to READ");
                     read_addr_d = input_base_q;
                     next_state = READ;
-                    start_reg_d = 1'b0;  // clear start_reg_q after start
+                    start_reg_d = 1'b1;  // latch start trigger
                 end
             end
-
+    
             READ: begin
                 $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
                 user_mem_addr = read_addr_q;
@@ -232,23 +233,18 @@ module cnn_top #(
                 pixel_in = user_mem_data_in;
                 valid_in = 1;
                 read_addr_d = read_addr_q + 1;
-            
+    
                 if (window_valid) begin
                     $display("[CNN] Window Valid! read_addr=0x%0h", read_addr_q);
                     $display("[CNN] Convolution output: conv_out=%0d", conv_out);
                     next_state = PROCESS;
-                end else begin
-                    next_state = READ;
                 end
             end
     
             PROCESS: begin
                 if (relu_valid_out) begin
                     $display("[CNN] ReLU Output: relu_out_data=%0d", relu_out_data);
-                    $display("[CNN] PROCESS: relu_valid_out high, moving to WRITE.");
                     next_state = WRITE;
-                end else begin
-                    $display("[CNN] PROCESS: waiting for relu_valid_out...");
                 end
             end
     
@@ -258,12 +254,11 @@ module cnn_top #(
                 class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores_d[class_idx_q]);
                 next_state = IDLE;
+                start_reg_d = 1'b0; // Clear the start flag after completion
             end
         endcase
-    
-        if (status_reg)
-            $display("[CNN] Status_reg set!");
     end
+
     
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
