@@ -38,6 +38,7 @@ int main() {
     // Write weights to CNN hardware registers
     printf("Writing weights to CNN accelerator.\n");
     for (int i = 0; i < 9; i++) {
+        printf("Weight[%d]=%d\n", i, weights[i]);
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4*i) = (int8_t)weights[i];
     }
 
