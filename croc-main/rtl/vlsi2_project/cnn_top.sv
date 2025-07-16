@@ -205,7 +205,9 @@ module cnn_top #(
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;   // default
         $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
-    
+         if (state == IDLE && start_reg_q) begin
+            start_reg_d = 1'b0;
+        end
         case (state)
             IDLE: if (start_reg_q) begin
                 $display("[CNN] FSM start: Moving to READ");
@@ -258,6 +260,7 @@ module cnn_top #(
             status_reg <= 1'b0;
         end
     end
+
 
     assign done = status_reg;
 
