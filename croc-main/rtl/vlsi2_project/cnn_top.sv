@@ -97,7 +97,10 @@ module cnn_top #(
                     weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
                 end else begin
                     unique case (addr_q)
-                        ADDR_CTRL:        start_reg_d = 1'b1;
+                        ADDR_CTRL: begin
+                            start_reg_d = 1'b1;
+                            $display("[CNN] Received start command at ADDR_CTRL, start_reg_d=1");
+                        end
                         ADDR_INPUT_BASE:  input_base_d = wdata_q;
                         ADDR_CLASS_IDX:   class_idx_d  = wdata_q[3:0];
                         default:          rsp_err = 1'b1;
