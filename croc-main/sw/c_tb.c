@@ -78,5 +78,8 @@ int main() {
 
     uart_write_flush();
     printf("CNN processing completed, writing return code.\n");
-    return USER_FINISH_VALUE;
+    *reg32(USER_FINISH_ADDR, 0) = USER_FINISH_VALUE;
+    return 0;
+
+    //return USER_FINISH_VALUE;
 }
