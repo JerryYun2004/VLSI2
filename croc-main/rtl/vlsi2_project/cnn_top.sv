@@ -83,12 +83,14 @@ module cnn_top #(
 
     localparam ADDR_CLASS_SCORES = 32'h20;
 
+    logic start_reg_set; // Declare this at module scope
+
     always_comb begin
         rsp_data = '0;
         rsp_err = 1'b0;
         rvalid = 1'b0;
         input_base_d = input_base_q;
-        start_reg_d  = start_reg_q;  // retain by default
+        start_reg_set = 1'b0; // default to no start trigger
         class_idx_d  = class_idx_q;
         class_scores_d = class_scores_q;  // default retain
     
@@ -100,8 +102,8 @@ module cnn_top #(
                 end else begin
                     unique case (addr_q)
                         ADDR_CTRL: begin
-                            start_reg_d = 1'b1;
-                            $display("[CNN] Received start command at ADDR_CTRL, start_reg_d=1");
+                            start_reg_set = 1'b1; // Only set the trigger
+                            $display("[CNN] Received start command at ADDR_CTRL, start_reg_set=1");
                         end
                         ADDR_INPUT_BASE: input_base_d = wdata_q;
                         ADDR_CLASS_IDX:  class_idx_d  = wdata_q[3:0];
@@ -119,7 +121,7 @@ module cnn_top #(
                         ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
                         default: begin
                             if ((addr_q >= ADDR_CLASS_SCORES) && (addr_q < ADDR_CLASS_SCORES + 10*4)) begin
-                                rsp_data = class_scores_q[(addr_q - ADDR_CLASS_SCORES) >> 2];  // fixed
+                                rsp_data = class_scores_q[(addr_q - ADDR_CLASS_SCORES) >> 2];
                             end else begin
                                 rsp_data = 32'hDEAD_BEEF;
                             end
