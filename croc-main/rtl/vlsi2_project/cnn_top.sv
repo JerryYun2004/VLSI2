@@ -195,7 +195,7 @@ module cnn_top #(
         end
     end
 
-    always_comb begin
+   always_comb begin
         next_state = state;
         valid_in = 0;
         user_mem_read_en = 0;
@@ -204,13 +204,17 @@ module cnn_top #(
         pixel_in = 0;
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;   // default
+        $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
     
         case (state)
             IDLE: if (start_reg_q) begin
+                $display("[CNN] FSM start: Moving to READ");
+                start_reg_d = 1'b0;  // Clear start_reg after triggering
                 read_addr_d = input_base_q;
                 next_state = READ;
             end
             READ: begin
+                $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
                 user_mem_addr = read_addr_q;
                 user_mem_read_en = 1;
                 pixel_in = user_mem_data_in;
@@ -233,20 +237,25 @@ module cnn_top #(
                 end
             end
             WRITE: begin
+                $display("[CNN] WRITE: class_idx=%0d, score=%0d", class_idx_q, pooled_out);
                 class_scores[class_idx_q] = class_scores[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores[class_idx_q]);
                 next_state = IDLE;
             end
         endcase
+    
+        if (status_reg)
+            $display("[CNN] Status_reg set!");
     end
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             status_reg <= 1'b0;
         end else if (state == WRITE) begin
-            status_reg <= 1'b1; // set when operation finishes
+            status_reg <= 1'b1;
+            $display("[CNN] status_reg set to 1 at WRITE");
         end else if (req_q && we_q && addr_q == ADDR_CTRL) begin
-            status_reg <= 1'b0; // clear on CPU start command
+            status_reg <= 1'b0;
         end
     end
 
