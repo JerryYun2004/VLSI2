@@ -92,6 +92,7 @@ module cnn_top #(
         class_idx_d = class_idx_q;
 
         if (req_q) begin
+            $display("[CNN] Write access: we_q=%0b addr_q=0x%0h wdata_q=0x%0h", we_q, addr_q, wdata_q);
             if (we_q) begin
                 if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
                     weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
@@ -208,7 +209,7 @@ module cnn_top #(
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;   // default
     
-        $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
+        // $display("[CNN] State: %0d, start_reg_q: %0b, window_valid: %0b", state, start_reg_q, window_valid);
     
         if (state == IDLE && start_reg_q) begin
             start_reg_d = 1'b0;
