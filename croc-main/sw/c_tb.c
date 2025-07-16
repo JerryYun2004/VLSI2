@@ -33,7 +33,7 @@ int main() {
     uart_write_flush();
 
     uint32_t t0, t1, t2;
-    uint8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
+    int8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
 
     // Write weights to CNN hardware registers
     printf("Writing weights to CNN accelerator.\n");
