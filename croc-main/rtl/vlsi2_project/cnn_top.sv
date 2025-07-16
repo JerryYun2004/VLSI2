@@ -29,7 +29,7 @@ module cnn_top #(
     output logic user_mem_write_en
 );
 
-    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_1000;
+    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0900;
 
     logic signed [31:0] class_scores [0:9];
 
