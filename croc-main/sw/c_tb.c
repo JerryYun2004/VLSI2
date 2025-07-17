@@ -41,8 +41,10 @@ int main() {
     printf("Writing weights to CNN accelerator.\n");
     for (int i = 0; i < 9; i++) {
         printf("Weight[%d]=%d\n", i, weights[i]);
+        uart_write_flush();
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4*i) = (int8_t)weights[i];
     }
+
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG)  = SRAM_BASE + IMAGE_OFFSET;
 
@@ -50,6 +52,7 @@ int main() {
 
     for (int class_idx = 0; class_idx < 10; class_idx++) {
         printf("Processing for class index: %d\n", class_idx);
+        uart_write_flush();
         *reg32(CNN_BASE_ADDR, CNN_CLASS_IDX_REG) = class_idx;
 
         *reg32(CNN_BASE_ADDR, CNN_CTRL_REG) = 1;
@@ -58,7 +61,7 @@ int main() {
         //while ((*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0) && --timeout);
         while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0);
         printf("Class %d: Completed processing.\n", class_idx);
-
+        uart_write_flush();
         //if (timeout == 0) {
         //    printf("Error: CNN processing timeout for class index %d\n", class_idx);
         //} else {
@@ -73,6 +76,7 @@ int main() {
         uint32_t addr = CNN_BASE_ADDR + CNN_CLASS_SCORES_BASE + (class_idx * 4);
         uint32_t score = *reg32(addr, 0);
         printf("Class %d accumulated score: %u\n", class_idx, score);
+        uart_write_flush();
     }
 
     asm volatile("csrr %0, mcycle" : "=r"(t2)::"memory");
