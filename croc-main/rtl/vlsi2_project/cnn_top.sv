@@ -30,6 +30,7 @@ module cnn_top #(
 );
 
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0900;
+    localparam logic [31:0] CNN_CLASS_SCORES_BASE = 32'h20001020;
 
     logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
 
@@ -257,13 +258,17 @@ module cnn_top #(
                 class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores_d[class_idx_q]);
             
-                // New lines to write back to memory-mapped register
-                user_mem_addr = output_base_q + (class_idx_q << 2);  // Assuming 32-bit data per class
+                user_mem_addr = 32'h20001020 + (class_idx_q << 2);
                 user_mem_data_out = class_scores_d[class_idx_q];
-                user_mem_write_en = 1;
+                user_mem_write_en = 1; // pulse asserted for 1 cycle
             
+                next_state = WRITE_WAIT; // transition to WRITE_WAIT to drop write enable
+            end
+
+            WRITE_WAIT: begin
+                user_mem_write_en = 0; // deassert write enable
                 next_state = IDLE;
-                start_reg_d = 1'b0; // Clear the start flag after completion
+                start_reg_d = 1'b0; // clear start flag
             end
         endcase
     end
