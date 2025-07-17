@@ -163,7 +163,7 @@ end
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
 
     // OBI protocol signals
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && !obi_busy;
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we);
     assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
     assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
     assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
