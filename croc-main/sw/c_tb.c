@@ -3,6 +3,7 @@
 #include "gpio.h"
 #include "util.h"
 #include "config.h"
+#include <stdint.h>
 
 #define CNN_BASE_ADDR          0x20001000
 #define CNN_CTRL_REG           0x00
@@ -24,6 +25,13 @@ volatile uint32_t status = 0;
 int8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
 int weight_index = 0;
 
+void print_stack_pointer() {
+    uint32_t sp_val;
+    asm volatile ("mv %0, sp" : "=r"(sp_val));
+    printf("Initial SP: 0x%08X\n", sp_val);
+    uart_write_flush();
+}
+
 void* memcpy(void* dest, const void* src, unsigned int n) {
     char* d = (char*)dest;
     const char* s = (const char*)src;
@@ -35,11 +43,7 @@ void* memcpy(void* dest, const void* src, unsigned int n) {
 
 int main() {
     uart_init();
-
-    // Print the initial stack pointer
-    register uint32_t sp asm("sp");
-    printf("Initial SP: 0x%08X\n", sp);
-    uart_write_flush();
+    print_stack_pointer();
 
     printf("Starting CNN accelerator test for all classes.\n");
     uart_write_flush();
@@ -51,15 +55,11 @@ int main() {
 
     for (weight_index = 0; weight_index < 9; weight_index++) {
         printf("Before weight write: weight_index=%d weights[weight_index]=%d\n", weight_index, weights[weight_index]);
-        uart_write_flush();
-
         printf("About to write to addr=0x%08X\n", CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index);
         uart_write_flush();
 
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index) = (int8_t)weights[weight_index];
-
-        // Optional GPIO debug
-        // gpio_set(weight_index);
+        // Optional: gpio_set(weight_index);
     }
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
