@@ -18,6 +18,8 @@
 #define USER_FINISH_ADDR 0x03000008
 #define USER_FINISH_VALUE 0xCAFEDEAD
 
+volatile uint32_t status = 0;
+
 void* memcpy(void* dest, const void* src, unsigned int n) {
     char* d = (char*)dest;
     const char* s = (const char*)src;
