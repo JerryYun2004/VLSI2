@@ -541,16 +541,16 @@ module tb_croc_soc #(
         predicted_label = tb_data[3:0];
         
         if (predicted_label === expected_label) begin
-          $display("@%t | [CHECK] ✅ Prediction correct: %0d == %0d", $time, predicted_label, expected_label);
+          $display("@%t | [CHECK] Prediction correct: %0d == %0d", $time, predicted_label, expected_label);
         end else begin
-          $display("@%t | [CHECK] ❌ Prediction wrong: got %0d, expected %0d", $time, predicted_label, expected_label);
+          $display("@%t | [CHECK] Prediction wrong: got %0d, expected %0d", $time, predicted_label, expected_label);
         end
         
         // finish simulation
-        // repeat(50) @(posedge clk);
-        // `ifdef TRACE_WAVE
-        //    $dumpflush;
-        // `endif
+        repeat(50) @(posedge clk);
+        `ifdef TRACE_WAVE
+            $dumpflush;
+        `endif
         $finish();
     end
 
