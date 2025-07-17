@@ -35,7 +35,7 @@ module cnn_top #(
     logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
 
     logic req_q, req_d;
-    logic we_q, we_d;
+    logic we_d;
     logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
     logic [ObiCfg.IdWidth-1:0] id_q, id_d;
     logic [ObiCfg.DataWidth-1:0] wdata_q, wdata_d;
@@ -208,7 +208,7 @@ module cnn_top #(
         end
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_n) begin
             user_mem_write_en_q <= 0;
         end else begin
