@@ -142,7 +142,7 @@ module cnn_top #(
     assign sbr_obi_rsp_o.r.err = rsp_err;
     assign sbr_obi_rsp_o.r.r_optional = '0;
 
-    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
+    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE,WRITE_WAIT} state_t;
     state_t state, next_state;
 
     assign mgr_obi_req_o.req = (state == READ);
