@@ -26,7 +26,7 @@ module cnn_top #(
     output logic [ADDR_WIDTH-1:0] user_mem_addr,
     output logic user_mem_read_en,
     output logic [DATA_WIDTH-1:0] user_mem_data_out,
-    output logic user_mem_write_en
+    output logic we_q
 );
 
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0900;
@@ -42,6 +42,8 @@ module cnn_top #(
     logic [ObiCfg.DataWidth-1:0] rsp_data;
     logic rsp_err;
     logic rvalid;
+    logic user_mem_write_en_q;
+    logic user_mem_write_en;
 
     logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
     logic start_reg_q, start_reg_d;
@@ -186,6 +188,7 @@ module cnn_top #(
     assign relu_valid_in = window_valid;
     assign relu_ready_out = 1'b1;
     assign relu_ready_in = 1'b1;
+    assign we_q = user_mem_write_en_q;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -205,7 +208,13 @@ module cnn_top #(
         end
     end
 
-
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            user_mem_write_en_q <= 0;
+        end else begin
+            user_mem_write_en_q <= user_mem_write_en;
+        end
+    end
 
    always_comb begin
         next_state = state;
