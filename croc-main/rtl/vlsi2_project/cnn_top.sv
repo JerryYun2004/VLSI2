@@ -143,7 +143,7 @@ module cnn_top #(
     assign sbr_obi_rsp_o.r.err = rsp_err;
     assign sbr_obi_rsp_o.r.r_optional = '0;
 
-    typedef enum logic [2:0] {IDLE, READ, PROCESS, WRITE, WRITE_WAIT} state_t;
+    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
     state_t state, next_state;
 
     assign mgr_obi_req_o.req = (state == READ);
@@ -261,24 +261,20 @@ module cnn_top #(
             WRITE: begin
                 $display("[CNN] Pooled Output: pooled_out=%0d", pooled_out);
                 $display("[CNN] WRITE: class_idx=%0d, score=%0d", class_idx_q, pooled_out);
-                
+    
                 class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores_d[class_idx_q]);
-            
+    
                 user_mem_addr = 32'h20001020 + (class_idx_q << 2);
                 user_mem_data_out = class_scores_d[class_idx_q];
-                user_mem_write_en = 1; // pulse asserted for 1 cycle
-            
-                next_state = WRITE_WAIT; // transition to WRITE_WAIT to drop write enable
-            end
-
-            WRITE_WAIT: begin
-                user_mem_write_en = 0; // deassert write enable
-                next_state = IDLE;
+                user_mem_write_en = 1; // one-cycle pulse asserted here
+    
+                next_state = IDLE; // directly return to IDLE
                 start_reg_d = 1'b0; // clear start flag
             end
         endcase
     end
+
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
