@@ -114,27 +114,35 @@ module cnn_top #(
             $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h", sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
             
             if (sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q) begin
-                $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h",
-                         sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
-            
-                // WRITE ACCESS
-                if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
-                    weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
-                    $display("[CNN] Weight[%0d] written with value %0d",
-                             (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2,
-                             sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
+                    $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h",
+                             sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
+                
+                    // WRITE ACCESS
+                    if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
+                        weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
+                        $display("[CNN] Weight[%0d] written with value %0d",
+                                 (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2,
+                                 sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
+                        write_in_progress_d = 1'b1;
+                    end else begin
+                        unique case (sbr_obi_req_i.a.addr)
+                            ADDR_CTRL: begin
+                                start_reg_set = 1'b1;
+                                $display("[CNN] Start command issued.");
+                                write_in_progress_d = 1'b1;
+                            end
+                            ADDR_INPUT_BASE: begin
+                                input_base_d = sbr_obi_req_i.a.wdata;
+                                write_in_progress_d = 1'b1;
+                            end
+                            ADDR_CLASS_IDX: begin
+                                class_idx_d = sbr_obi_req_i.a.wdata[3:0];
+                                write_in_progress_d = 1'b1;
+                            end
+                            default: rsp_err_d = 1'b1;
+                        endcase
+                    end
                 end else begin
-                    unique case (sbr_obi_req_i.a.addr)
-                        ADDR_CTRL: begin
-                            start_reg_set = 1'b1;
-                            $display("[CNN] Start command issued.");
-                        end
-                        ADDR_INPUT_BASE: input_base_d = sbr_obi_req_i.a.wdata;
-                        ADDR_CLASS_IDX:  class_idx_d  = sbr_obi_req_i.a.wdata[3:0];
-                        default: rsp_err_d = 1'b1;
-                    endcase
-                end
-            end else begin
                 // READ ACCESS
                 rsp_err_d = 1'b0;
                 if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
@@ -157,7 +165,7 @@ module cnn_top #(
             
                 pending_read_d = 1'b1;  // mark read as pending
                 pending_rid_d = sbr_obi_req_i.a.aid;  // latch the aid for r.rid response
-                write_in_progress_d = 1'b1;  // set write in progress
+                // write_in_progress_d = 1'b1;  // set write in progress
             end
         end
 
