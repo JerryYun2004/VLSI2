@@ -40,10 +40,18 @@ int main() {
     // Write weights to CNN hardware registers
     printf("Writing weights to CNN accelerator.\n");
     for (int i = 0; i < 9; i++) {
-        printf("Weight[%d]=%d\n", i, weights[i]);
+        printf("Before weight write: i=%d weights[i]=%d\n", i, weights[i]);
         uart_write_flush();
+    
+        printf("About to write to addr=0x%08X\n", CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4*i);
+        uart_write_flush();
+    
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4*i) = (int8_t)weights[i];
+    
+        // Optional: If you have GPIO debugging capability
+        gpio_set(i);
     }
+
 
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG)  = SRAM_BASE + IMAGE_OFFSET;
