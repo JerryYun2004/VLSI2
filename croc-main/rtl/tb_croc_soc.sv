@@ -469,7 +469,7 @@ module tb_croc_soc #(
     //  Testbench  //
     /////////////////
 
-    logic [31:0] tb_data;
+    logic [31:0] tb_data = 32'b0;
     logic [3:0] expected_label;
     logic [3:0] predicted_label;    
 
@@ -520,8 +520,8 @@ module tb_croc_soc #(
         //jtag_resume();
 
         // wait for non-zero return value (written into core status register)
-        // $display("@%t | [CORE] Wait for end of code...", $time);
-        // jtag_wait_for_eoc(tb_data);
+        $display("@%t | [CORE] Wait for end of code...", $time);
+        jtag_wait_for_eoc(tb_data);
         
         $display("@%t | [JTAG] Reading confidence scores from CNN internal registers", $time);
         for (int i = 0; i < 10; i++) begin
