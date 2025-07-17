@@ -291,7 +291,6 @@ module cnn_top #(
         end
     end
 
-
     assign done = status_reg;
 
 endmodule
