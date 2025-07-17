@@ -32,6 +32,15 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   logic [31:0] cnn_mem_data_out;
   logic        cnn_mem_write_en;
 
+   always_comb begin
+      if (cnn_sbr_obi_req.req) begin
+          $display("[USER_DOMAIN] To CNN: req=%0b we=%0b addr=0x%0h wdata=0x%0h",
+               cnn_sbr_obi_req.req,
+               cnn_sbr_obi_req.a.we,
+               cnn_sbr_obi_req.a.addr,
+               cnn_sbr_obi_req.a.wdata);
+      end
+  end
 
   //////////////////////
   // User Manager MUX //
