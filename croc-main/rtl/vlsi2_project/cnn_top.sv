@@ -253,8 +253,15 @@ module cnn_top #(
             WRITE: begin
                 $display("[CNN] Pooled Output: pooled_out=%0d", pooled_out);
                 $display("[CNN] WRITE: class_idx=%0d, score=%0d", class_idx_q, pooled_out);
+                
                 class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
                 $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores_d[class_idx_q]);
+            
+                // New lines to write back to memory-mapped register
+                user_mem_addr = output_base_q + (class_idx_q << 2);  // Assuming 32-bit data per class
+                user_mem_data_out = class_scores_d[class_idx_q];
+                user_mem_write_en = 1;
+            
                 next_state = IDLE;
                 start_reg_d = 1'b0; // Clear the start flag after completion
             end
