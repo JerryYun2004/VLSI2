@@ -55,7 +55,7 @@ module tb_croc_soc #(
                                            + soc_ctrl_reg_pkg::SOC_CTRL_FETCHEN_OFFSET;
     localparam bit [31:0] CoreStatusAddr = croc_pkg::SocCtrlAddrOffset
                                            + soc_ctrl_reg_pkg::SOC_CTRL_CORESTATUS_OFFSET;
-    localparam bit [31:0] InputImageBaseAddr = croc_pkg::SramBaseAddr + 32'h1000; // 0x10000000 + 0x1000
+    localparam bit [31:0] InputImageBaseAddr = croc_pkg::SramBaseAddr + 32'h0A00; // 0x10000000 + 0x0A00
     
     /////////////////////////////
     //  Command Line Arguments //
