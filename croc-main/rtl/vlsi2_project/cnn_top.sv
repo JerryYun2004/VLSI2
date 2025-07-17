@@ -26,7 +26,7 @@ module cnn_top #(
     output logic [ADDR_WIDTH-1:0] user_mem_addr,
     output logic user_mem_read_en,
     output logic [DATA_WIDTH-1:0] user_mem_data_out,
-    output logic we_q
+    output logic user_mem_write_en
 );
 
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0900;
@@ -35,7 +35,7 @@ module cnn_top #(
     logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
 
     logic req_q, req_d;
-    logic we_d;
+    logic we_q, we_d;
     logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
     logic [ObiCfg.IdWidth-1:0] id_q, id_d;
     logic [ObiCfg.DataWidth-1:0] wdata_q, wdata_d;
@@ -43,7 +43,6 @@ module cnn_top #(
     logic rsp_err;
     logic rvalid;
     logic user_mem_write_en_q;
-    logic user_mem_write_en;
 
     logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
     logic start_reg_q, start_reg_d;
@@ -188,7 +187,6 @@ module cnn_top #(
     assign relu_valid_in = window_valid;
     assign relu_ready_out = 1'b1;
     assign relu_ready_in = 1'b1;
-    assign we_q = user_mem_write_en_q;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -281,8 +279,6 @@ module cnn_top #(
             end
         endcase
     end
-
-    
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
