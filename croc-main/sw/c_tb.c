@@ -14,7 +14,7 @@
 #define CNN_CLASS_SCORES_BASE  0x20
 
 #define SRAM_BASE              0x10000000
-#define IMAGE_OFFSET           0x0900
+#define IMAGE_OFFSET           0x1000
 
 #define USER_FINISH_ADDR       0x03000008
 #define USER_FINISH_VALUE      0xCAFEDEAD
