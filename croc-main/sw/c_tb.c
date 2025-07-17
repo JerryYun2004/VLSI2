@@ -28,7 +28,7 @@ int weight_index = 0;
 void print_stack_pointer() {
     uint32_t sp_val;
     asm volatile ("mv %0, sp" : "=r"(sp_val));
-    printf("Initial SP: 0x%08X\n", sp_val);
+    printf("Initial SP: 0x%x\n", sp_val);
     uart_write_flush();
 }
 
@@ -54,12 +54,12 @@ int main() {
     uart_write_flush();
 
     for (weight_index = 0; weight_index < 9; weight_index++) {
-        printf("Before weight write: weight_index=%d weights[weight_index]=%d\n",
+        printf("Before weight write: weight_index=%x weights[weight_index]=%x\n",
             weight_index, weights[weight_index]);
         uart_write_flush();
 
         uint32_t addr = CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index;
-        printf("About to write to addr=0x%08X\n", addr);
+        printf("About to write to addr=0x%x\n", addr);
         uart_write_flush();
 
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index) = weights[weight_index];
@@ -70,7 +70,7 @@ int main() {
     asm volatile("csrr %0, mcycle" : "=r"(t0)::"memory");
 
     for (int class_idx = 0; class_idx < 10; class_idx++) {
-        printf("Processing for class index: %d\n", class_idx);
+        printf("Processing for class index: %x\n", class_idx);
         uart_write_flush();
 
         *reg32(CNN_BASE_ADDR, CNN_CLASS_IDX_REG) = class_idx;
@@ -78,7 +78,7 @@ int main() {
 
         while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0);
 
-        printf("Class %d: Completed processing.\n", class_idx);
+        printf("Class %x: Completed processing.\n", class_idx);
         uart_write_flush();
     }
 
@@ -91,13 +91,13 @@ int main() {
         uint32_t addr = CNN_BASE_ADDR + CNN_CLASS_SCORES_BASE + (class_idx * 4);
         uint32_t score = *reg32(addr, 0);
 
-        printf("Class %d accumulated score: %u\n", class_idx, score);
+        printf("Class %x accumulated score: %x\n", class_idx, score);
         uart_write_flush();
     }
 
     asm volatile("csrr %0, mcycle" : "=r"(t2)::"memory");
 
-    printf("Total execution cycles: CNN runs %u, Output reading %u\n", t1 - t0, t2 - t1);
+    printf("Total execution cycles: CNN runs %x, Output reading %x\n", t1 - t0, t2 - t1);
     uart_write_flush();
 
     printf("CNN processing completed, writing return code.\n");
