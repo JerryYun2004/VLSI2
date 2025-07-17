@@ -69,6 +69,7 @@ module cnn_top #(
     logic [ObiCfg.DataWidth-1:0] rsp_data_d, rsp_data_q;
     logic rsp_err_d, rsp_err_q;
     logic [ObiCfg.IdWidth-1:0] pending_rid_q, pending_rid_d;
+    logic write_in_progress_q, write_in_progress_d;
     
     `FF(req_q, req_d, '0)
     `FF(we_q, we_d, '0)
@@ -100,6 +101,7 @@ module cnn_top #(
         pending_read_d = pending_read_q;
         rsp_data_d = rsp_data_q;
         rsp_err_d = rsp_err_q;
+        write_in_progress_d = write_in_progress_q;
     
         input_base_d = input_base_q;
         start_reg_set = 1'b0;
@@ -111,13 +113,16 @@ module cnn_top #(
         if (sbr_obi_req_i.req && !obi_busy) begin
             $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h", sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
             
-            if (sbr_obi_req_i.a.we) begin
+            if (sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q) begin
+                $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h",
+                         sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
+            
                 // WRITE ACCESS
                 if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
                     weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
-                    $display("[CNN] Weight[%0d] written with value %0d", 
-                              (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2, 
-                              sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
+                    $display("[CNN] Weight[%0d] written with value %0d",
+                             (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2,
+                             sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
                 end else begin
                     unique case (sbr_obi_req_i.a.addr)
                         ADDR_CTRL: begin
@@ -152,18 +157,22 @@ module cnn_top #(
             
                 pending_read_d = 1'b1;  // mark read as pending
                 pending_rid_d = sbr_obi_req_i.a.aid;  // latch the aid for r.rid response
+                write_in_progress_d = 1'b1;  // set write in progress
             end
         end
 
     // Clear pending read after rvalid
     if (pending_read_q && sbr_obi_rsp_o.rvalid)
         pending_read_d = 1'b0;
+    if (!sbr_obi_req_i.req) begin
+        write_in_progress_d = 1'b0;
+    end
 end
 
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
 
     // OBI protocol signals
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we);
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we) && !write_in_progress_q;
     assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
     assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
     assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
@@ -263,6 +272,13 @@ end
             pending_rid_q <= '0;
         else
             pending_rid_q <= pending_rid_d;
+    end
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni)
+            write_in_progress_q <= 1'b0;
+        else
+            write_in_progress_q <= write_in_progress_d;
     end
 
 
