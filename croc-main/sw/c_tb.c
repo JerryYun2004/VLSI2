@@ -49,7 +49,7 @@ int main() {
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4*i) = (int8_t)weights[i];
     
         // Optional: If you have GPIO debugging capability
-        gpio_set(i);
+        // gpio_set(i);
     }
 
 
