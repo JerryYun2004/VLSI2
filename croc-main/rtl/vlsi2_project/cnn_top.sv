@@ -158,7 +158,6 @@ module cnn_top #(
     // Clear pending read after rvalid
     if (pending_read_q && sbr_obi_rsp_o.rvalid)
         pending_read_d = 1'b0;
-    end
 end
 
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
