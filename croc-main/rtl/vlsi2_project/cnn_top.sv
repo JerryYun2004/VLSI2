@@ -209,7 +209,7 @@ module cnn_top #(
     end
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_n) begin
+        if (!rst_ni) begin
             user_mem_write_en_q <= 0;
         end else begin
             user_mem_write_en_q <= user_mem_write_en;
