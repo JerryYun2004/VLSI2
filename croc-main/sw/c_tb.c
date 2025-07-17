@@ -21,8 +21,8 @@
 
 volatile uint32_t status = 0;
 
-// Move weights and index to global scope
-int8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
+// Global constants
+const int8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
 int weight_index = 0;
 
 void print_stack_pointer() {
@@ -54,12 +54,15 @@ int main() {
     uart_write_flush();
 
     for (weight_index = 0; weight_index < 9; weight_index++) {
-        printf("Before weight write: weight_index=%d weights[weight_index]=%d\n", weight_index, weights[weight_index]);
-        printf("About to write to addr=0x%08X\n", CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index);
+        printf("Before weight write: weight_index=%d weights[weight_index]=%d\n",
+            weight_index, weights[weight_index]);
         uart_write_flush();
 
-        *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index) = (int8_t)weights[weight_index];
-        // Optional: gpio_set(weight_index);
+        uint32_t addr = CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index;
+        printf("About to write to addr=0x%08X\n", addr);
+        uart_write_flush();
+
+        *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index) = weights[weight_index];
     }
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
