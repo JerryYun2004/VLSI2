@@ -62,6 +62,14 @@ module cnn_top #(
 
     logic [ADDR_WIDTH-1:0] read_addr;
 
+    logic obi_busy;
+    assign obi_busy = pending_read_q; // CNN is processing when not in IDLE
+
+    logic pending_read_q, pending_read_d;
+    logic [ObiCfg.DataWidth-1:0] rsp_data_d, rsp_data_q;
+    logic rsp_err_d, rsp_err_q;
+    logic [ObiCfg.IdWidth-1:0] pending_rid_q, pending_rid_d;
+    
     `FF(req_q, req_d, '0)
     `FF(we_q, we_d, '0)
     `FF(addr_q, addr_d, '0)
@@ -87,60 +95,80 @@ module cnn_top #(
 
     logic start_reg_set; // Declare this at module scope
 
+    // Combinational decoder
     always_comb begin
-        rsp_data = '0;
-        rsp_err = 1'b0;
-        rvalid = 1'b0;
-        input_base_d = input_base_q;
-        start_reg_set = 1'b0; // default to no start trigger
-        class_idx_d  = class_idx_q;
-        class_scores_d = class_scores_q;  // default retain
+        pending_read_d = pending_read_q;
+        rsp_data_d = rsp_data_q;
+        rsp_err_d = rsp_err_q;
     
-        if (req_q) begin
-            $display("[CNN] Write access: we_q=%0b addr_q=0x%0h wdata_q=0x%0h", we_q, addr_q, wdata_q);
-            if (we_q) begin
-                if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
-                    weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2] = wdata_q[DATA_WIDTH-1:0];
-                    $display("[CNN] Weight[%0d] loaded with value %0d",
-                    (addr_q - ADDR_WEIGHT_BASE) >> 2, wdata_q[DATA_WIDTH-1:0]);
+        input_base_d = input_base_q;
+        start_reg_set = 1'b0;
+        class_idx_d  = class_idx_q;
+        class_scores_d = class_scores_q;
+    
+        // obi_busy = pending_read_q; // busy while waiting to complete a read
+    
+        if (sbr_obi_req_i.req && !obi_busy) begin
+            $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h", sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
+            
+            if (sbr_obi_req_i.a.we) begin
+                // WRITE ACCESS
+                if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
+                    weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
+                    $display("[CNN] Weight[%0d] written with value %0d", 
+                              (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2, 
+                              sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
                 end else begin
-                    unique case (addr_q)
+                    unique case (sbr_obi_req_i.a.addr)
                         ADDR_CTRL: begin
-                            start_reg_set = 1'b1; // Only set the trigger
-                            $display("[CNN] Received start command at ADDR_CTRL, start_reg_set=1");
+                            start_reg_set = 1'b1;
+                            $display("[CNN] Start command issued.");
                         end
-                        ADDR_INPUT_BASE: input_base_d = wdata_q;
-                        ADDR_CLASS_IDX:  class_idx_d  = wdata_q[3:0];
-                        default: rsp_err = 1'b1;
+                        ADDR_INPUT_BASE: input_base_d = sbr_obi_req_i.a.wdata;
+                        ADDR_CLASS_IDX:  class_idx_d  = sbr_obi_req_i.a.wdata[3:0];
+                        default: rsp_err_d = 1'b1;
                     endcase
                 end
             end else begin
-                rvalid = 1'b1;
-                if (addr_q >= ADDR_WEIGHT_BASE && addr_q < ADDR_WEIGHT_BASE + 9*4) begin
-                    rsp_data = {{(32 - DATA_WIDTH){1'b0}}, weights_reg[(addr_q - ADDR_WEIGHT_BASE) >> 2]};
+                // READ ACCESS
+                rsp_err_d = 1'b0;
+                if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
+                    rsp_data_d = {{(32 - DATA_WIDTH){1'b0}}, weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2]};
                 end else begin
-                    unique case (addr_q)
-                        ADDR_STATUS:      rsp_data = status_reg;
-                        ADDR_INPUT_BASE:  rsp_data = input_base_q;
-                        ADDR_CLASS_IDX:   rsp_data = {{28'd0}, class_idx_q};
+                    unique case (sbr_obi_req_i.a.addr)
+                        ADDR_STATUS:     rsp_data_d = status_reg;
+                        ADDR_INPUT_BASE: rsp_data_d = input_base_q;
+                        ADDR_CLASS_IDX:  rsp_data_d = {{28'd0}, class_idx_q};
                         default: begin
-                            if ((addr_q >= ADDR_CLASS_SCORES) && (addr_q < ADDR_CLASS_SCORES + 10*4)) begin
-                                rsp_data = class_scores_q[(addr_q - ADDR_CLASS_SCORES) >> 2];
+                            if (sbr_obi_req_i.a.addr >= ADDR_CLASS_SCORES && sbr_obi_req_i.a.addr < ADDR_CLASS_SCORES + 10*4) begin
+                                rsp_data_d = class_scores_q[(sbr_obi_req_i.a.addr - ADDR_CLASS_SCORES) >> 2];
                             end else begin
-                                rsp_data = 32'hDEAD_BEEF;
+                                rsp_data_d = 32'hDEAD_BEEF;
+                                rsp_err_d = 1'b1;
                             end
                         end
                     endcase
                 end
+            
+                pending_read_d = 1'b1;  // mark read as pending
+                pending_rid_d = sbr_obi_req_i.a.aid;  // latch the aid for r.rid response
             end
         end
-    end
 
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
-    assign sbr_obi_rsp_o.rvalid = rvalid;
-    assign sbr_obi_rsp_o.r.rdata = rsp_data;
-    assign sbr_obi_rsp_o.r.rid = id_q;
-    assign sbr_obi_rsp_o.r.err = rsp_err;
+    // Clear pending read after rvalid
+    if (pending_read_q && sbr_obi_rsp_o.rvalid)
+        pending_read_d = 1'b0;
+    end
+end
+
+    assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
+
+    // OBI protocol signals
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && !obi_busy;
+    assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
+    assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
+    assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
+    assign sbr_obi_rsp_o.r.err = rsp_err_q;
     assign sbr_obi_rsp_o.r.r_optional = '0;
 
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
@@ -213,6 +241,31 @@ module cnn_top #(
             user_mem_write_en_q <= user_mem_write_en;
         end
     end
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni)
+            pending_read_q <= 1'b0;
+        else
+            pending_read_q <= pending_read_d;
+    end
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            rsp_data_q <= '0;
+            rsp_err_q <= 1'b0;
+        end else begin
+            rsp_data_q <= rsp_data_d;
+            rsp_err_q  <= rsp_err_d;
+        end
+    end
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni)
+            pending_rid_q <= '0;
+        else
+            pending_rid_q <= pending_rid_d;
+    end
+
 
    always_comb begin
         next_state = state;
