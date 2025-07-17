@@ -514,10 +514,10 @@ module tb_croc_soc #(
         fetch_en_i = 1'b1;
 
         // halt core
-        jtag_halt();
+        //jtag_halt();
 
         // resume core
-        jtag_resume();
+        //jtag_resume();
 
         // wait for non-zero return value (written into core status register)
         // $display("@%t | [CORE] Wait for end of code...", $time);
