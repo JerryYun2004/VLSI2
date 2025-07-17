@@ -481,10 +481,10 @@ module tb_croc_soc #(
     initial begin
         $timeformat(-9, 0, "ns", 12); // 1: scale (ns=-9), 2: decimals, 3: suffix, 4: print-field width
         // configure VCD dump
-        // `ifdef TRACE_WAVE
-        //    $dumpfile("croc.vcd");
-        //    $dumpvars(1,i_croc_soc);
-        // `endif
+        `ifdef TRACE_WAVE
+            $dumpfile("croc.vcd");
+            $dumpvars(1,i_croc_soc);
+        `endif
 
         uart_rx_i  = 1'b0;
         fetch_en_i = 1'b0;
