@@ -31,6 +31,9 @@ module cnn_top #(
 
     localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0A00;
     localparam logic [31:0] CNN_CLASS_SCORES_BASE = 32'h20001020;
+    localparam logic [31:0] ADDR_INPUT_BASE = 32'h20001008;
+    localparam logic [31:0] ADDR_CLASS_IDX  = 32'h20001014;
+    localparam logic [31:0] ADDR_CTRL       = 32'h20001000;
 
     localparam logic signed [DATA_WIDTH-1:0] HARD_WEIGHTS [0:8] = '{
         8'sd17, 8'sd89, 8'sd39,
@@ -42,6 +45,21 @@ module cnn_top #(
     logic [3:0] class_idx_q, class_idx_d;
     logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
     logic start_reg_q, start_reg_d;
+
+    logic req_q, req_d;
+    logic we_q, we_d;
+    logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
+    logic [ObiCfg.DataWidth-1:0] wdata_q, wdata_d;
+
+    `FF(req_q, req_d, '0);
+    `FF(we_q, we_d, '0);
+    `FF(addr_q, addr_d, '0);
+    `FF(wdata_q, wdata_d, '0);
+
+    assign req_d = sbr_obi_req_i.req;
+    assign we_d = sbr_obi_req_i.a.we;
+    assign addr_d = sbr_obi_req_i.a.addr;
+    assign wdata_d = sbr_obi_req_i.a.wdata;
 
     logic [DATA_WIDTH-1:0] pixel_in;
     logic valid_in;
@@ -107,6 +125,24 @@ module cnn_top #(
         valid_in = 1'b0;
         pixel_in = '0;
 
+        if (req_q && we_q) begin
+            case(addr_q)
+                ADDR_INPUT_BASE: begin
+                    input_base_d = wdata_q;
+                    $display("[CNN_OBI] Write to INPUT_BASE: 0x%0h", wdata_q);
+                end
+                ADDR_CLASS_IDX: begin
+                    class_idx_d = wdata_q[3:0];
+                    $display("[CNN_OBI] Write to CLASS_IDX: %0d", wdata_q[3:0]);
+                end
+                ADDR_CTRL: begin
+                    start_reg_d = 1'b1;
+                    $display("[CNN_OBI] Write to CTRL: Start signal asserted");
+                end
+                default: ;
+            endcase
+        end
+
         case (state_q)
             IDLE: begin
                 if (start_reg_q) begin
@@ -160,6 +196,13 @@ module cnn_top #(
             input_base_q <= input_base_d;
         end
     end
+
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
+    assign sbr_obi_rsp_o.rvalid = req_q;
+    assign sbr_obi_rsp_o.r.rdata = '0;
+    assign sbr_obi_rsp_o.r.rid = '0;
+    assign sbr_obi_rsp_o.r.err = 1'b0;
+    assign sbr_obi_rsp_o.r.r_optional = '0;
 
     assign done = (state_q == IDLE);
 
