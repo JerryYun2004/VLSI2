@@ -172,7 +172,7 @@ module cnn_top #(
     // Clear pending read after rvalid
     if (pending_read_q && sbr_obi_rsp_o.rvalid)
         pending_read_d = 1'b0;
-    if (sbr_obi_rsp_o.gnt) begin
+    if (write_in_progress_q && sbr_obi_rsp_o.gnt) begin
         write_in_progress_d = 1'b0;
     end
 end
