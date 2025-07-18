@@ -52,20 +52,20 @@ int main() {
     uart_write_flush();
 
     for (weight_index = 0; weight_index < 9; weight_index++) {
-        printf("Before weight write: weight_index=%x weights[weight_index]=%x\n",
-            weight_index, weights[weight_index]);
-        uart_write_flush();
-
         uint32_t addr = CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index;
-        printf("About to write to addr=0x%x\n", addr);
+        int8_t weight = weights[weight_index];
+    
+        printf("Writing weight[%d] = %d to addr 0x%x\n", weight_index, weight, addr);
         uart_write_flush();
-
-        *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index) = weights[weight_index];
-
-        // Dummy read or delay to ensure grant is processed
-        volatile uint32_t confirm = *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index);
-        dummy_delay();
+    
+        *reg32(addr, 0) = weight;
+    
+        // Read back to verify
+        volatile uint32_t confirm = *reg32(addr, 0);
+        printf("Read back weight[%d]: 0x%x\n", weight_index, confirm);
+        uart_write_flush();
     }
+
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
 
