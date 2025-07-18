@@ -9,7 +9,6 @@
 #define CNN_CTRL_REG           0x00
 #define CNN_STATUS_REG         0x04
 #define CNN_INPUT_BASE_REG     0x08
-#define CNN_WEIGHT_BASE_REG    0x10
 #define CNN_CLASS_IDX_REG      0x14
 #define CNN_CLASS_SCORES_BASE  0x20
 
@@ -20,10 +19,6 @@
 #define USER_FINISH_VALUE      0xCAFEDEAD
 
 volatile uint32_t status = 0;
-
-// Global constants
-const int8_t weights[9] = {17, 89, 39, 100, 70, 78, 11, 74, 52};
-int weight_index = 0;
 
 void print_stack_pointer() {
     uint32_t sp_val;
@@ -47,25 +42,6 @@ int main() {
     uart_write_flush();
 
     uint32_t t0, t1, t2;
-
-    printf("Writing weights to CNN accelerator.\n");
-    uart_write_flush();
-
-    for (weight_index = 0; weight_index < 9; weight_index++) {
-        uint32_t addr = CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index;
-        int8_t weight = weights[weight_index];
-    
-        printf("Writing weight[%x] = %x to addr 0x%x\n", weight_index, weight, addr);
-        uart_write_flush();
-    
-        *reg32(addr, 0) = weight;
-    
-        // Read back to verify
-        volatile uint32_t confirm = *reg32(addr, 0);
-        printf("Read back weight[%x]: 0x%x\n", weight_index, confirm);
-        uart_write_flush();
-    }
-
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
 
