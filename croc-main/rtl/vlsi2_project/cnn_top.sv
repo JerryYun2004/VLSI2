@@ -61,15 +61,6 @@ module cnn_top #(
     logic relu_valid_out, relu_ready_out;
 
     logic [ADDR_WIDTH-1:0] read_addr;
-
-    logic obi_busy;
-    assign obi_busy = pending_read_q; // CNN is processing when not in IDLE
-
-    logic pending_read_q, pending_read_d;
-    logic [ObiCfg.DataWidth-1:0] rsp_data_d, rsp_data_q;
-    logic rsp_err_d, rsp_err_q;
-    logic [ObiCfg.IdWidth-1:0] pending_rid_q, pending_rid_d;
-    logic write_in_progress_q, write_in_progress_d;
     
     `FF(req_q, req_d, '0)
     `FF(we_q, we_d, '0)
@@ -96,99 +87,100 @@ module cnn_top #(
 
     logic start_reg_set; // Declare this at module scope
 
-    // Combinational decoder
+    logic obi_busy;
+    assign obi_busy = pending_read_q; // CNN is processing when not in IDLE
+    
+    logic pending_read_q, pending_read_d;
+    logic [ObiCfg.DataWidth-1:0] rsp_data_d, rsp_data_q;
+    logic rsp_err_d, rsp_err_q;
+    logic [ObiCfg.IdWidth-1:0] pending_rid_q, pending_rid_d;
+    logic write_in_progress_q, write_in_progress_d;
+
+    logic write_enable;
+    assign write_enable = sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q && sbr_obi_rsp_o.gnt;
+    
     always_comb begin
-        pending_read_d = pending_read_q;
-        rsp_data_d = rsp_data_q;
-        rsp_err_d = rsp_err_q;
-        write_in_progress_d = write_in_progress_q;
+        // Default state retention
+        pending_read_d       = pending_read_q;
+        rsp_data_d           = rsp_data_q;
+        rsp_err_d            = rsp_err_q;
+        pending_rid_d        = pending_rid_q;
+        write_in_progress_d  = write_in_progress_q;
     
-        input_base_d = input_base_q;
-        start_reg_set = 1'b0;
-        class_idx_d  = class_idx_q;
-        class_scores_d = class_scores_q;
-    
-        // obi_busy = pending_read_q; // busy while waiting to complete a read
+        input_base_d         = input_base_q;
+        start_reg_set        = 1'b0;
+        class_idx_d          = class_idx_q;
+        class_scores_d       = class_scores_q;
     
         if (sbr_obi_req_i.req && !obi_busy) begin
-            $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h", sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
-            
-            if (sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q) begin
-                    $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h",
-                             sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
-                
-                    // WRITE ACCESS
-                    if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
-                        weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
-                        $display("[CNN] Weight[%0d] written with value %0d",
-                                 (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2,
-                                 sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
-                        write_in_progress_d = 1'b1;
-                    end else begin
-                        unique case (sbr_obi_req_i.a.addr)
-                            ADDR_CTRL: begin
-                                start_reg_set = 1'b1;
-                                $display("[CNN] Start command issued.");
-                                write_in_progress_d = 1'b1;
-                            end
-                            ADDR_INPUT_BASE: begin
-                                input_base_d = sbr_obi_req_i.a.wdata;
-                                write_in_progress_d = 1'b1;
-                            end
-                            ADDR_CLASS_IDX: begin
-                                class_idx_d = sbr_obi_req_i.a.wdata[3:0];
-                                write_in_progress_d = 1'b1;
-                            end
-                            default: rsp_err_d = 1'b1;
-                        endcase
+            $display("[CNN] Access: we=%0b addr=0x%0h wdata=0x%0h", 
+                     sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
+    
+            if (write_enable) begin
+                // ---- WRITE ----
+                unique if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
+                    weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
+                    $display("[CNN] Weight[%0d] written with value %0d", 
+                              (sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2,
+                              sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0]);
+                end else unique case (sbr_obi_req_i.a.addr)
+                    ADDR_CTRL: begin
+                        start_reg_set = 1'b1;
+                        $display("[CNN] Start command issued.");
                     end
-                end else begin
-                // READ ACCESS
+                    ADDR_INPUT_BASE: input_base_d = sbr_obi_req_i.a.wdata;
+                    ADDR_CLASS_IDX:  class_idx_d  = sbr_obi_req_i.a.wdata[3:0];
+                    default: rsp_err_d = 1'b1;
+                endcase
+    
+                write_in_progress_d = 1'b1; // mark write in progress
+            end 
+            else if (sbr_obi_req_i.a.we) begin
+                // Write attempted while write_in_progress_q==1, skip
+                $display("[CNN] Skipping write as write_in_progress_q is high.");
+            end 
+            else begin
+                // ---- READ ----
                 rsp_err_d = 1'b0;
                 if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
                     rsp_data_d = {{(32 - DATA_WIDTH){1'b0}}, weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2]};
-                end else begin
-                    unique case (sbr_obi_req_i.a.addr)
-                        ADDR_STATUS:     rsp_data_d = status_reg;
-                        ADDR_INPUT_BASE: rsp_data_d = input_base_q;
-                        ADDR_CLASS_IDX:  rsp_data_d = {{28'd0}, class_idx_q};
-                        default: begin
-                            if (sbr_obi_req_i.a.addr >= ADDR_CLASS_SCORES && sbr_obi_req_i.a.addr < ADDR_CLASS_SCORES + 10*4) begin
-                                rsp_data_d = class_scores_q[(sbr_obi_req_i.a.addr - ADDR_CLASS_SCORES) >> 2];
-                            end else begin
-                                rsp_data_d = 32'hDEAD_BEEF;
-                                rsp_err_d = 1'b1;
-                            end
+                end else unique case (sbr_obi_req_i.a.addr)
+                    ADDR_STATUS:     rsp_data_d = status_reg;
+                    ADDR_INPUT_BASE: rsp_data_d = input_base_q;
+                    ADDR_CLASS_IDX:  rsp_data_d = {{28'd0}, class_idx_q};
+                    default: begin
+                        if (sbr_obi_req_i.a.addr >= ADDR_CLASS_SCORES && sbr_obi_req_i.a.addr < ADDR_CLASS_SCORES + 10*4) begin
+                            rsp_data_d = class_scores_q[(sbr_obi_req_i.a.addr - ADDR_CLASS_SCORES) >> 2];
+                        end else begin
+                            rsp_data_d = 32'hDEAD_BEEF;
+                            rsp_err_d  = 1'b1;
                         end
-                    endcase
-                end
-
-                pending_read_d = 1'b1;  // mark read as pending
-                pending_rid_d = sbr_obi_req_i.a.aid;  // latch the aid for r.rid response
-                // write_in_progress_d = 1'b1;  // set write in progress
+                    end
+                endcase
+    
+                pending_read_d = 1'b1;
+                pending_rid_d  = sbr_obi_req_i.a.aid;
             end
         end
-
-    // Clear pending read after rvalid
-    if (pending_read_q && sbr_obi_rsp_o.rvalid)
-        pending_read_d = 1'b0;
-    if (write_in_progress_q && sbr_obi_rsp_o.gnt) begin
-        write_in_progress_d = 1'b0;
+    
+        // Clear pending_read if response valid
+        if (pending_read_q && sbr_obi_rsp_o.rvalid)
+            pending_read_d = 1'b0;
+    
+        // Clear write in progress on grant
+        if (write_in_progress_q && sbr_obi_rsp_o.gnt)
+            write_in_progress_d = 1'b0;
     end
-end
 
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
 
     // OBI protocol signals
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we) && !write_in_progress_q;
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we);
     assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
     assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
     assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
     assign sbr_obi_rsp_o.r.err = rsp_err_q;
     assign sbr_obi_rsp_o.r.r_optional = '0;
-
-    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
-    state_t state, next_state;
 
     assign mgr_obi_req_o.req = (state == READ);
     assign mgr_obi_req_o.a.we = 1'b0;
@@ -259,38 +251,32 @@ end
     end
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni)
-            pending_read_q <= 1'b0;
-        else
-            pending_read_q <= pending_read_d;
-    end
-
-    always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
-            rsp_data_q <= '0;
-            rsp_err_q <= 1'b0;
+            pending_read_q <= 1'b0;
+            rsp_data_q     <= '0;
+            rsp_err_q      <= 1'b0;
+            pending_rid_q  <= '0;
+            write_in_progress_q <= 1'b0;
         end else begin
-            rsp_data_q <= rsp_data_d;
-            rsp_err_q  <= rsp_err_d;
+            pending_read_q      <= pending_read_d;
+            rsp_data_q          <= rsp_data_d;
+            rsp_err_q           <= rsp_err_d;
+            pending_rid_q       <= pending_rid_d;
+            write_in_progress_q <= write_in_progress_d;
+            // Assertion to catch double writes
+            assert (we_q |-> !write_in_progress_q)
+                else $error("[CNN] Double write hazard detected at time %0t", $time);
+            if (write_in_progress_q) begin
+                assert (sbr_obi_rsp_o.gnt)
+                    else $error("[CNN] Write in progress but no grant issued at time %0t", $time);
+            end
         end
     end
 
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni)
-            pending_rid_q <= '0;
-        else
-            pending_rid_q <= pending_rid_d;
-    end
 
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni)
-            write_in_progress_q <= 1'b0;
-        else
-            write_in_progress_q <= write_in_progress_d;
-    end
-
-
-   always_comb begin
+    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
+    state_t state, next_state;
+    always_comb begin
         next_state = state;
         valid_in = 0;
         user_mem_read_en = 0;
