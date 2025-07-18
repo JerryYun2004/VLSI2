@@ -252,10 +252,10 @@ module cnn_top #(
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
-            pending_read_q <= 1'b0;
-            rsp_data_q     <= '0;
-            rsp_err_q      <= 1'b0;
-            pending_rid_q  <= '0;
+            pending_read_q      <= 1'b0;
+            rsp_data_q          <= '0;
+            rsp_err_q           <= 1'b0;
+            pending_rid_q       <= '0;
             write_in_progress_q <= 1'b0;
         end else begin
             pending_read_q      <= pending_read_d;
@@ -263,15 +263,18 @@ module cnn_top #(
             rsp_err_q           <= rsp_err_d;
             pending_rid_q       <= pending_rid_d;
             write_in_progress_q <= write_in_progress_d;
-            // Assertion to catch double writes
-            assert (we_q |-> !write_in_progress_q)
-                else $error("[CNN] Double write hazard detected at time %0t", $time);
-            if (write_in_progress_q) begin
-                assert (sbr_obi_rsp_o.gnt)
-                    else $error("[CNN] Write in progress but no grant issued at time %0t", $time);
+    
+            // Replacing assertions with if + $error
+            if (we_q && write_in_progress_q) begin
+                $error("[CNN] Double write hazard detected at time %0t", $time);
+            end
+    
+            if (write_in_progress_q && !sbr_obi_rsp_o.gnt) begin
+                $error("[CNN] Write in progress but no grant issued at time %0t", $time);
             end
         end
     end
+
 
 
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
