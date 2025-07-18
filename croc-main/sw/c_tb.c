@@ -32,13 +32,11 @@ void print_stack_pointer() {
     uart_write_flush();
 }
 
-void* memcpy(void* dest, const void* src, unsigned int n) {
-    char* d = (char*)dest;
-    const char* s = (const char*)src;
-    while (n--) {
-        *d++ = *s++;
+void dummy_delay() {
+    volatile int d;
+    for (d = 0; d < 500; d++) {
+        asm volatile("nop");
     }
-    return dest;
 }
 
 int main() {
@@ -63,6 +61,10 @@ int main() {
         uart_write_flush();
 
         *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index) = weights[weight_index];
+
+        // Dummy read or delay to ensure grant is processed
+        volatile uint32_t confirm = *reg32(CNN_BASE_ADDR, CNN_WEIGHT_BASE_REG + 4 * weight_index);
+        dummy_delay();
     }
 
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
