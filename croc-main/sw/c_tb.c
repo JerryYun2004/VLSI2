@@ -27,13 +27,6 @@ void print_stack_pointer() {
     uart_write_flush();
 }
 
-void dummy_delay() {
-    volatile int d;
-    for (d = 0; d < 500; d++) {
-        asm volatile("nop");
-    }
-}
-
 int main() {
     uart_init();
     print_stack_pointer();
@@ -43,10 +36,12 @@ int main() {
 
     uint32_t t0, t1, t2;
 
+    // Set input base address for CNN
     *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
 
     asm volatile("csrr %0, mcycle" : "=r"(t0)::"memory");
 
+    // Process all 10 classes
     for (int class_idx = 0; class_idx < 10; class_idx++) {
         printf("Processing for class index: %x\n", class_idx);
         uart_write_flush();
@@ -54,15 +49,16 @@ int main() {
         *reg32(CNN_BASE_ADDR, CNN_CLASS_IDX_REG) = class_idx;
         *reg32(CNN_BASE_ADDR, CNN_CTRL_REG) = 1;
 
+        // Wait for CNN to signal completion
         while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0);
 
-        printf("Class %x: Completed processing.\n", class_idx);
+        printf("Class %x: Processing completed.\n", class_idx);
         uart_write_flush();
     }
 
     asm volatile("csrr %0, mcycle" : "=r"(t1)::"memory");
 
-    printf("Reading output results per class (from CNN internal scores):\n");
+    printf("Reading CNN output scores per class:\n");
     uart_write_flush();
 
     for (int class_idx = 0; class_idx < 10; class_idx++) {
@@ -75,10 +71,10 @@ int main() {
 
     asm volatile("csrr %0, mcycle" : "=r"(t2)::"memory");
 
-    printf("Total execution cycles: CNN runs %x, Output reading %x\n", t1 - t0, t2 - t1);
+    printf("Performance: Processing time = %x cycles, Output read time = %x cycles\n", t1 - t0, t2 - t1);
     uart_write_flush();
 
-    printf("CNN processing completed, writing return code.\n");
+    printf("CNN processing complete. Writing finish code.\n");
     uart_write_flush();
 
     return USER_FINISH_VALUE;
