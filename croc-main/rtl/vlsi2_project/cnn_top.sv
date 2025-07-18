@@ -50,16 +50,24 @@ module cnn_top #(
     logic we_q, we_d;
     logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
     logic [ObiCfg.DataWidth-1:0] wdata_q, wdata_d;
+    logic rvalid_q, rvalid_d;
 
+    `FF(rvalid_q, rvalid_d, 1'b0)
     `FF(req_q, req_d, '0);
     `FF(we_q, we_d, '0);
     `FF(addr_q, addr_d, '0);
     `FF(wdata_q, wdata_d, '0);
+    `FF(state_q, state_d, IDLE)
+    `FF(read_addr_q, read_addr_d, '0)
+    `FF(class_scores_q, class_scores_d, '{default:0})
+    `FF(class_idx_q, class_idx_d, '0)
+    `FF(start_reg_q, start_reg_d, 1'b0)
+    `FF(input_base_q, input_base_d, DEFAULT_INPUT_BASE)
 
-    assign req_d = sbr_obi_req_i.req;
-    assign we_d = sbr_obi_req_i.a.we;
-    assign addr_d = sbr_obi_req_i.a.addr;
-    assign wdata_d = sbr_obi_req_i.a.wdata;
+    assign req_d   = obi_handshake;
+    assign we_d    = obi_handshake ? sbr_obi_req_i.a.we : we_q;
+    assign addr_d  = obi_handshake ? sbr_obi_req_i.a.addr : addr_q;
+    assign wdata_d = obi_handshake ? sbr_obi_req_i.a.wdata : wdata_q;
 
     logic [DATA_WIDTH-1:0] pixel_in;
     logic valid_in;
@@ -68,6 +76,9 @@ module cnn_top #(
     logic signed [31:0] conv_out, relu_out_data, pooled_out;
     logic relu_valid_in, relu_ready_in;
     logic relu_valid_out, relu_ready_out;
+
+    logic obi_handshake;
+
 
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
     state_t state_q, state_d;
@@ -108,7 +119,16 @@ module cnn_top #(
     assign relu_valid_in = window_valid;
     assign relu_ready_out = 1'b1;
     assign relu_ready_in = 1'b1;
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
+    assign obi_handshake = sbr_obi_req_i.req;
 
+    always_comb begin
+        rvalid_d = 1'b0;
+        if (obi_handshake) begin
+            rvalid_d = 1'b1;  // Raise rvalid for next cycle
+        end
+    end
+    
     always_comb begin
         state_d = state_q;
         read_addr_d = read_addr_q;
@@ -179,30 +199,17 @@ module cnn_top #(
         endcase
     end
 
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
-            state_q <= IDLE;
-            read_addr_q <= '0;
-            class_scores_q <= '{default:0};
-            class_idx_q <= '0;
-            start_reg_q <= 1'b0;
-            input_base_q <= DEFAULT_INPUT_BASE;
-        end else begin
-            state_q <= state_d;
-            read_addr_q <= read_addr_d;
-            class_scores_q <= class_scores_d;
-            class_idx_q <= class_idx_d;
-            start_reg_q <= start_reg_d;
-            input_base_q <= input_base_d;
-        end
-    end
-
     assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
-    assign sbr_obi_rsp_o.rvalid = req_q;
-    assign sbr_obi_rsp_o.r.rdata = '0;
+    assign sbr_obi_rsp_o.r.rdata =
+        (addr_q == ADDR_INPUT_BASE) ? input_base_q :
+        (addr_q == ADDR_CLASS_IDX)  ? {{28'd0}, class_idx_q} :
+        (addr_q == ADDR_CTRL)       ? {{31'd0}, start_reg_q} :
+        32'd0;
+
     assign sbr_obi_rsp_o.r.rid = '0;
     assign sbr_obi_rsp_o.r.err = 1'b0;
     assign sbr_obi_rsp_o.r.r_optional = '0;
+    assign sbr_obi_rsp_o.rvalid = rvalid_q;
 
     assign done = (state_q == IDLE);
 
