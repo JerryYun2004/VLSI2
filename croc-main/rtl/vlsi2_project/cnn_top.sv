@@ -99,6 +99,9 @@ module cnn_top #(
     logic write_enable;
     assign write_enable = sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q && sbr_obi_rsp_o.gnt;
 
+    logic grant_pulse;
+    assign grant_pulse = sbr_obi_rsp_o.gnt;
+
     always_comb begin
         // Default state retention
         pending_read_d       = pending_read_q;
@@ -135,7 +138,7 @@ module cnn_top #(
             
                 write_in_progress_d = 1'b1;
             
-            end else if (sbr_obi_req_i.a.we) begin
+            end else if (sbr_obi_req_i.a.we && write_in_progress_q && !grant_pulse) begin
                 // Write attempted while write_in_progress_q==1, skip
                 $display("[CNN] Skipping write as write_in_progress_q is high.");
             end 
@@ -175,7 +178,7 @@ module cnn_top #(
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
 
     // OBI protocol signals
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we);
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we) && !(write_in_progress_q && sbr_obi_req_i.a.we && grant_pulse);
     assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
     assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
     assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
@@ -265,7 +268,7 @@ module cnn_top #(
             write_in_progress_q <= write_in_progress_d;
     
             // Replacing assertions with if + $error
-            if (we_q && write_in_progress_q) begin
+            if (write_enable && !grant_pulse) begin
                 $error("[CNN] Double write hazard detected at time %0t", $time);
             end
     
