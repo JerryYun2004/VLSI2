@@ -77,13 +77,13 @@ module cnn_top #(
     assign id_d = sbr_obi_req_i.a.aid;
     assign wdata_d = sbr_obi_req_i.a.wdata;
 
-    localparam ADDR_CTRL = 32'h00;
-    localparam ADDR_STATUS = 32'h04;
-    localparam ADDR_INPUT_BASE = 32'h08;
-    localparam ADDR_WEIGHT_BASE = 32'h10;
-    localparam ADDR_CLASS_IDX = 32'h14;
+    localparam ADDR_CTRL = 32'h20001000;
+    localparam ADDR_STATUS = 32'h20001004;
+    localparam ADDR_INPUT_BASE = 32'h20001008;
+    localparam ADDR_WEIGHT_BASE = 32'h20001010;
+    localparam ADDR_CLASS_IDX = 32'h20001014;
 
-    localparam ADDR_CLASS_SCORES = 32'h20;
+    localparam ADDR_CLASS_SCORES = 32'h20001020;
 
     logic start_reg_set; // Declare this at module scope
     logic write_enable;
