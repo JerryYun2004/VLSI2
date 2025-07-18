@@ -135,11 +135,7 @@ module cnn_top #(
             
                 write_in_progress_d = 1'b1;
             
-            end else if (!sbr_obi_req_i.req) begin
-                write_in_progress_d = 1'b0;
-                $display("[CNN] write_in_progress cleared as req deasserted at time %0t", $time);
-            end
-            else if (sbr_obi_req_i.a.we) begin
+            end else if (sbr_obi_req_i.a.we) begin
                 // Write attempted while write_in_progress_q==1, skip
                 $display("[CNN] Skipping write as write_in_progress_q is high.");
             end 
@@ -170,12 +166,16 @@ module cnn_top #(
         // Clear pending_read if response valid
         if (pending_read_q && sbr_obi_rsp_o.rvalid)
             pending_read_d = 1'b0;
+        if (write_in_progress_q && sbr_obi_rsp_o.gnt) begin
+            write_in_progress_d = 1'b0;
+            $display("[CNN] write_in_progress cleared on grant at time %0t", $time);
+        end
     end
 
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
 
     // OBI protocol signals
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we) && !write_in_progress_q;
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we);
     assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
     assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
     assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
@@ -269,7 +269,7 @@ module cnn_top #(
                 $error("[CNN] Double write hazard detected at time %0t", $time);
             end
     
-            if (write_in_progress_q && !sbr_obi_rsp_o.gnt) begin
+            if (write_in_progress_q && sbr_obi_req_i.req && !sbr_obi_rsp_o.gnt) begin
                 $error("[CNN] Write in progress but no grant issued at time %0t", $time);
             end
         end
