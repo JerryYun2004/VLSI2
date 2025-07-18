@@ -98,7 +98,7 @@ module cnn_top #(
 
     logic write_enable;
     assign write_enable = sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q && sbr_obi_rsp_o.gnt;
-    
+
     always_comb begin
         // Default state retention
         pending_read_d       = pending_read_q;
@@ -132,9 +132,13 @@ module cnn_top #(
                     ADDR_CLASS_IDX:  class_idx_d  = sbr_obi_req_i.a.wdata[3:0];
                     default: rsp_err_d = 1'b1;
                 endcase
-    
-                write_in_progress_d = 1'b1; // mark write in progress
-            end 
+            
+                write_in_progress_d = 1'b1;
+            
+            end else if (!sbr_obi_req_i.req) begin
+                write_in_progress_d = 1'b0;
+                $display("[CNN] write_in_progress cleared as req deasserted at time %0t", $time);
+            end
             else if (sbr_obi_req_i.a.we) begin
                 // Write attempted while write_in_progress_q==1, skip
                 $display("[CNN] Skipping write as write_in_progress_q is high.");
@@ -166,16 +170,12 @@ module cnn_top #(
         // Clear pending_read if response valid
         if (pending_read_q && sbr_obi_rsp_o.rvalid)
             pending_read_d = 1'b0;
-    
-        // Clear write in progress on grant
-        if (write_in_progress_q && sbr_obi_rsp_o.gnt)
-            write_in_progress_d = 1'b0;
     end
 
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
 
     // OBI protocol signals
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we);
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req && (!obi_busy || sbr_obi_req_i.a.we) && !write_in_progress_q;
     assign sbr_obi_rsp_o.rvalid = pending_read_q && !handshake_done;
     assign sbr_obi_rsp_o.r.rdata = rsp_data_q;
     assign sbr_obi_rsp_o.r.rid = pending_rid_q;  // track ID from req
