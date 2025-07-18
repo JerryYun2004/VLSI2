@@ -162,7 +162,7 @@ module cnn_top #(
                         end
                     endcase
                 end
-            
+
                 pending_read_d = 1'b1;  // mark read as pending
                 pending_rid_d = sbr_obi_req_i.a.aid;  // latch the aid for r.rid response
                 // write_in_progress_d = 1'b1;  // set write in progress
@@ -172,7 +172,7 @@ module cnn_top #(
     // Clear pending read after rvalid
     if (pending_read_q && sbr_obi_rsp_o.rvalid)
         pending_read_d = 1'b0;
-    if (!sbr_obi_req_i.req) begin
+    if (sbr_obi_rsp_o.gnt) begin
         write_in_progress_d = 1'b0;
     end
 end
