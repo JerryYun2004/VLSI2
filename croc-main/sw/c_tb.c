@@ -55,14 +55,14 @@ int main() {
         uint32_t addr = CNN_BASE_ADDR + CNN_WEIGHT_BASE_REG + 4 * weight_index;
         int8_t weight = weights[weight_index];
     
-        printf("Writing weight[%d] = %d to addr 0x%x\n", weight_index, weight, addr);
+        printf("Writing weight[%x] = %x to addr 0x%x\n", weight_index, weight, addr);
         uart_write_flush();
     
         *reg32(addr, 0) = weight;
     
         // Read back to verify
         volatile uint32_t confirm = *reg32(addr, 0);
-        printf("Read back weight[%d]: 0x%x\n", weight_index, confirm);
+        printf("Read back weight[%x]: 0x%x\n", weight_index, confirm);
         uart_write_flush();
     }
 
