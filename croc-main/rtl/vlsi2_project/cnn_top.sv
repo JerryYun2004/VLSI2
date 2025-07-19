@@ -78,7 +78,8 @@ module cnn_top #(
     logic relu_valid_out, relu_ready_out;
 
     logic obi_handshake;
-
+    logic mem_read_en_q;
+    logic [DATA_WIDTH-1:0] user_mem_data_in_q;
 
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
     state_t state_q, state_d;
@@ -176,15 +177,16 @@ module cnn_top #(
             READ: begin
                 user_mem_addr = read_addr_q;
                 user_mem_read_en = 1'b1;
-                pixel_in = user_mem_data_in;
-                valid_in = 1'b1;
-
                 read_addr_d = read_addr_q + 1;
-
+            
+                pixel_in = user_mem_data_in_q;
+                valid_in = mem_read_en_q;
+            
                 if (window_valid) begin
                     state_d = PROCESS;
                 end
             end
+
             PROCESS: begin
                 if (relu_valid_out) begin
                     state_d = WRITE;
@@ -202,6 +204,17 @@ module cnn_top #(
         endcase
     end
 
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            mem_read_en_q <= 1'b0;
+            user_mem_data_in_q <= '0;
+        end else begin
+            mem_read_en_q <= user_mem_read_en;
+            if (user_mem_read_en)
+                user_mem_data_in_q <= user_mem_data_in;
+        end
+    end
+    
     assign sbr_obi_rsp_o.r.rdata =
         (addr_q == ADDR_INPUT_BASE) ? input_base_q :
         (addr_q == ADDR_CLASS_IDX)  ? {{28'd0}, class_idx_q} :
