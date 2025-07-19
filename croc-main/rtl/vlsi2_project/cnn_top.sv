@@ -120,14 +120,17 @@ module cnn_top #(
     assign relu_ready_out = 1'b1;
     assign relu_ready_in = 1'b1;
     assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
-    assign obi_handshake = sbr_obi_req_i.req;
+    assign obi_handshake = sbr_obi_req_i.req && !rvalid_q;
 
     always_comb begin
         rvalid_d = 1'b0;
         if (obi_handshake) begin
-            rvalid_d = 1'b1;  // Raise rvalid for next cycle
+            rvalid_d = 1'b1;
+        end else if (rvalid_q && !sbr_obi_req_i.req) begin
+            rvalid_d = 1'b0;
         end
     end
+
     
     always_comb begin
         state_d = state_q;
@@ -199,12 +202,13 @@ module cnn_top #(
         endcase
     end
 
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
     assign sbr_obi_rsp_o.r.rdata =
         (addr_q == ADDR_INPUT_BASE) ? input_base_q :
         (addr_q == ADDR_CLASS_IDX)  ? {{28'd0}, class_idx_q} :
         (addr_q == ADDR_CTRL)       ? {{31'd0}, start_reg_q} :
+        (addr_q == (ADDR_CTRL + 32'h04)) ? {{31'd0}, done} :
         32'd0;
+
 
     assign sbr_obi_rsp_o.r.rid = '0;
     assign sbr_obi_rsp_o.r.err = 1'b0;
