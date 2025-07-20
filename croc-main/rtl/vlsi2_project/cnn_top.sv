@@ -127,11 +127,11 @@ module cnn_top #(
         rvalid_d = 1'b0;
         if (obi_handshake) begin
             rvalid_d = 1'b1;
+            $display("[CNN_OBI] Handshake accepted: req=%0b we=%0b addr=0x%0h wdata=0x%0h", sbr_obi_req_i.req, sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
         end else if (rvalid_q && !sbr_obi_req_i.req) begin
             rvalid_d = 1'b0;
         end
     end
-
     
     always_comb begin
         state_d = state_q;
@@ -140,15 +140,15 @@ module cnn_top #(
         class_idx_d = class_idx_q;
         start_reg_d = start_reg_q;
         input_base_d = input_base_q;
-
+    
         user_mem_addr = '0;
         user_mem_read_en = 1'b0;
         user_mem_write_en = 1'b0;
         user_mem_data_out = '0;
-
+    
         valid_in = 1'b0;
         pixel_in = '0;
-
+    
         if (req_q && we_q) begin
             case(addr_q)
                 ADDR_INPUT_BASE: begin
@@ -166,33 +166,39 @@ module cnn_top #(
                 default: ;
             endcase
         end
-
+    
         case (state_q)
             IDLE: begin
                 if (start_reg_q) begin
                     read_addr_d = input_base_q;
+                    $display("[CNN] Transition to READ state, starting from address: 0x%0h", input_base_q);
                     state_d = READ;
                 end
             end
             READ: begin
                 user_mem_addr = read_addr_q;
                 user_mem_read_en = 1'b1;
-            
+    
                 pixel_in = user_mem_data_in_q;
                 valid_in = mem_read_en_q;
-            
+    
                 if (mem_read_en_q) begin
                     read_addr_d = read_addr_q + 1;
+                    $display("[CNN] Reading pixel: 0x%0h from address: 0x%0h", user_mem_data_in_q, read_addr_q);
                 end
-            
+    
+                if (valid_in) begin
+                    $display("[CNN] Pixel sent to line buffer: 0x%0h", pixel_in);
+                end
+    
                 if (window_valid) begin
-                    $display("[CNN] Window valid detected at address: 0x%0h", read_addr_q);
+                    $display("[CNN] Window valid detected. Moving to PROCESS state.");
                     state_d = PROCESS;
                 end
             end
-
             PROCESS: begin
                 if (relu_valid_out) begin
+                    $display("[CNN] PROCESS complete, moving to WRITE state.");
                     state_d = WRITE;
                 end
             end
@@ -201,21 +207,26 @@ module cnn_top #(
                 user_mem_addr = CNN_CLASS_SCORES_BASE + (class_idx_q * 4);
                 user_mem_data_out = class_scores_d[class_idx_q];
                 user_mem_write_en = 1'b1;
-
+    
+                $display("[CNN] Writing updated score for class %0d: 0x%0h", class_idx_q, class_scores_d[class_idx_q]);
+    
                 state_d = IDLE;
                 start_reg_d = 1'b0;
+                $display("[CNN] Returning to IDLE state.");
             end
         endcase
     end
-
+    
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             mem_read_en_q <= 1'b0;
             user_mem_data_in_q <= '0;
         end else begin
             mem_read_en_q <= user_mem_read_en;
-            if (user_mem_read_en)
+            if (user_mem_read_en) begin
                 user_mem_data_in_q <= user_mem_data_in;
+                $display("[CNN] Latched memory data: 0x%0h", user_mem_data_in);
+            end
         end
     end
     
