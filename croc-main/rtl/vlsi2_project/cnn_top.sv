@@ -22,6 +22,7 @@ module cnn_top #(
     output logic done
 );
 
+    localparam logic [31:0] CNN_STATUS_REG = 32'h20001004;
     localparam logic [31:0] CNN_CLASS_SCORES_BASE = 32'h20001020;
     localparam logic [31:0] ADDR_PIXEL_IN  = 32'h20001018;
     localparam logic [31:0] ADDR_CLASS_IDX = 32'h20001014;
@@ -48,12 +49,14 @@ module cnn_top #(
     logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
     logic start_reg_q, start_reg_d;
 
-    logic [12:0] window_counter_q, window_counter_d; // Enough for 28x28 = 784 max
-    localparam int TOTAL_WINDOWS = (28-2)*(28-2); // 26x26 = 676
+    logic [12:0] window_counter_q, window_counter_d;
+    localparam int TOTAL_WINDOWS = (28-2)*(28-2);
 
     logic req_q, req_d, we_q, we_d;
     logic [31:0] addr_q, addr_d, wdata_q, wdata_d;
     logic rvalid_q, rvalid_d;
+
+    logic done_q, done_d; // New latched done signal
 
     assign relu_valid_in = window_valid;
     assign relu_ready_in = 1'b1;
@@ -71,6 +74,7 @@ module cnn_top #(
     `FF(start_reg_q, start_reg_d, 1'b0)
     `FF(state_q, state_d, IDLE)
     `FF(window_counter_q, window_counter_d, 0)
+    `FF(done_q, done_d, 1'b0) // Register for done
 
     line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
         .clk(clk_i),
@@ -139,11 +143,16 @@ module cnn_top #(
         class_scores_d = class_scores_q;
         start_reg_d = start_reg_q;
 
-        done = 1'b0;
-        mgr_obi_req_o = '0; // Not used
+        done_d = done_q; // default hold value
+        mgr_obi_req_o = '0;
 
         case (state_q)
-            IDLE: if (start_reg_q) state_d = PROCESS;
+            IDLE: begin
+                if (start_reg_q) begin
+                    state_d = PROCESS;
+                    done_d = 1'b0; // clear done when starting
+                end
+            end
 
             PROCESS: if (window_valid && relu_valid_out) begin
                 class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
@@ -161,7 +170,7 @@ module cnn_top #(
                 mgr_obi_req_o.a.be    = 4'b1111;
                 mgr_obi_req_o.a.wdata = class_scores_d[class_idx_q];
 
-                done = 1'b1;
+                done_d = 1'b1;  // set done
                 start_reg_d = 1'b0;
                 window_counter_d = 0;
                 state_d = IDLE;
@@ -172,11 +181,14 @@ module cnn_top #(
     assign sbr_obi_rsp_o.r.rdata =
         (addr_q == ADDR_CLASS_IDX) ? {{28'd0}, class_idx_q} :
         (addr_q == ADDR_CTRL)      ? {{31'd0}, start_reg_q} :
+        (addr_q == CNN_STATUS_REG) ? {{31'd0}, done_q} :
         32'd0;
 
     assign sbr_obi_rsp_o.r.rid = '0;
     assign sbr_obi_rsp_o.r.err = 1'b0;
     assign sbr_obi_rsp_o.r.r_optional = '0;
     assign sbr_obi_rsp_o.rvalid = rvalid_q;
+
+    assign done = done_q;
 
 endmodule
