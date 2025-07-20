@@ -7,12 +7,10 @@ module cnn_top #(
     parameter int unsigned DATA_WIDTH = 8,
     parameter int unsigned ADDR_WIDTH = 32,
     parameter obi_cfg_t ObiCfg = obi_pkg::ObiDefaultConfig,
-    parameter type obi_req_t = logic,
-    parameter type obi_rsp_t = logic,
-    parameter type  sbr_obi_req_t = logic,
+    parameter type sbr_obi_req_t = logic,
     parameter type sbr_obi_rsp_t = logic,
     parameter type mgr_obi_req_t = logic,
-    parameter type  mgr_obi_rsp_t = logic
+    parameter type mgr_obi_rsp_t = logic
 )(
     input  logic clk_i,
     input  logic rst_ni,
@@ -21,19 +19,13 @@ module cnn_top #(
     output sbr_obi_rsp_t sbr_obi_rsp_o,
     output mgr_obi_req_t mgr_obi_req_o,
     input  mgr_obi_rsp_t mgr_obi_rsp_i,
-    output logic done,
-    input  logic [DATA_WIDTH-1:0] user_mem_data_in,
-    output logic [ADDR_WIDTH-1:0] user_mem_addr,
-    output logic user_mem_read_en,
-    output logic [DATA_WIDTH-1:0] user_mem_data_out,
-    output logic user_mem_write_en
+    output logic done
 );
 
-    localparam logic [ADDR_WIDTH-1:0] DEFAULT_INPUT_BASE  = 32'h1000_0A00;
     localparam logic [31:0] CNN_CLASS_SCORES_BASE = 32'h20001020;
-    localparam logic [31:0] ADDR_INPUT_BASE = 32'h20001008;
-    localparam logic [31:0] ADDR_CLASS_IDX  = 32'h20001014;
-    localparam logic [31:0] ADDR_CTRL       = 32'h20001000;
+    localparam logic [31:0] ADDR_PIXEL_IN  = 32'h20001018;
+    localparam logic [31:0] ADDR_CLASS_IDX = 32'h20001014;
+    localparam logic [31:0] ADDR_CTRL      = 32'h20001000;
 
     localparam logic signed [DATA_WIDTH-1:0] HARD_WEIGHTS [0:8] = '{
         8'sd17, 8'sd89, 8'sd39,
@@ -41,50 +33,44 @@ module cnn_top #(
         8'sd11, 8'sd74, 8'sd52
     };
 
-    logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
-    logic [3:0] class_idx_q, class_idx_d;
-    logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
-    logic start_reg_q, start_reg_d;
-
-    logic req_q, req_d;
-    logic we_q, we_d;
-    logic [ObiCfg.AddrWidth-1:0] addr_q, addr_d;
-    logic [ObiCfg.DataWidth-1:0] wdata_q, wdata_d;
-    logic rvalid_q, rvalid_d;
-
-    `FF(rvalid_q, rvalid_d, 1'b0)
-    `FF(req_q, req_d, '0);
-    `FF(we_q, we_d, '0);
-    `FF(addr_q, addr_d, '0);
-    `FF(wdata_q, wdata_d, '0);
-    `FF(state_q, state_d, IDLE)
-    `FF(read_addr_q, read_addr_d, '0)
-    `FF(class_scores_q, class_scores_d, '{default:0})
-    `FF(class_idx_q, class_idx_d, '0)
-    `FF(start_reg_q, start_reg_d, 1'b0)
-    `FF(input_base_q, input_base_d, DEFAULT_INPUT_BASE)
-
-    assign req_d   = obi_handshake;
-    assign we_d    = obi_handshake ? sbr_obi_req_i.a.we : we_q;
-    assign addr_d  = obi_handshake ? sbr_obi_req_i.a.addr : addr_q;
-    assign wdata_d = obi_handshake ? sbr_obi_req_i.a.wdata : wdata_q;
+    typedef enum logic [1:0] {IDLE, PROCESS, WRITE} state_t;
+    state_t state_q, state_d;
 
     logic [DATA_WIDTH-1:0] pixel_in;
-    logic valid_in;
+    logic valid_in, window_valid;
     logic [DATA_WIDTH-1:0] window[0:8];
-    logic window_valid;
     logic signed [31:0] conv_out, relu_out_data, pooled_out;
+
     logic relu_valid_in, relu_ready_in;
     logic relu_valid_out, relu_ready_out;
 
-    logic obi_handshake;
-    logic mem_read_en_q;
-    logic [DATA_WIDTH-1:0] user_mem_data_in_q;
+    logic [3:0] class_idx_q, class_idx_d;
+    logic signed [31:0] class_scores_q [0:9], class_scores_d [0:9];
+    logic start_reg_q, start_reg_d;
 
-    typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
-    state_t state_q, state_d;
+    logic [12:0] window_counter_q, window_counter_d; // Enough for 28x28 = 784 max
+    localparam int TOTAL_WINDOWS = (28-2)*(28-2); // 26x26 = 676
 
-    logic [ADDR_WIDTH-1:0] read_addr_q, read_addr_d;
+    logic req_q, req_d, we_q, we_d;
+    logic [31:0] addr_q, addr_d, wdata_q, wdata_d;
+    logic rvalid_q, rvalid_d;
+
+    assign relu_valid_in = window_valid;
+    assign relu_ready_in = 1'b1;
+    assign relu_ready_out = 1'b1;
+    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
+    logic obi_handshake = sbr_obi_req_i.req && !rvalid_q;
+
+    `FF(req_q, req_d, '0)
+    `FF(we_q, we_d, '0)
+    `FF(addr_q, addr_d, '0)
+    `FF(wdata_q, wdata_d, '0)
+    `FF(rvalid_q, rvalid_d, '0)
+    `FF(class_idx_q, class_idx_d, '0)
+    `FF(class_scores_q, class_scores_d, '{default:0})
+    `FF(start_reg_q, start_reg_d, 1'b0)
+    `FF(state_q, state_d, IDLE)
+    `FF(window_counter_q, window_counter_d, 0)
 
     line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
         .clk(clk_i),
@@ -117,132 +103,80 @@ module cnn_top #(
         .pool_out(pooled_out)
     );
 
-    assign relu_valid_in = window_valid;
-    assign relu_ready_out = 1'b1;
-    assign relu_ready_in = 1'b1;
-    assign sbr_obi_rsp_o.gnt = sbr_obi_req_i.req;
-    assign obi_handshake = sbr_obi_req_i.req && !rvalid_q;
+    // OBI transaction handling
+    always_comb begin
+        req_d   = obi_handshake;
+        we_d    = obi_handshake ? sbr_obi_req_i.a.we : we_q;
+        addr_d  = obi_handshake ? sbr_obi_req_i.a.addr : addr_q;
+        wdata_d = obi_handshake ? sbr_obi_req_i.a.wdata : wdata_q;
 
-    always_comb begin
-        rvalid_d = 1'b0;
-        if (obi_handshake) begin
-            rvalid_d = 1'b1;
-            $display("[CNN_OBI] Handshake accepted: req=%0b we=%0b addr=0x%0h wdata=0x%0h", sbr_obi_req_i.req, sbr_obi_req_i.a.we, sbr_obi_req_i.a.addr, sbr_obi_req_i.a.wdata);
-        end else if (rvalid_q && !sbr_obi_req_i.req) begin
-            rvalid_d = 1'b0;
-        end
-    end
-    
-    always_comb begin
-        state_d = state_q;
-        read_addr_d = read_addr_q;
-        class_scores_d = class_scores_q;
+        rvalid_d = (obi_handshake) ? 1'b1 :
+                   (rvalid_q && !sbr_obi_req_i.req) ? 1'b0 : rvalid_q;
+
+        pixel_in = '0;
+        valid_in = 1'b0;
+
         class_idx_d = class_idx_q;
         start_reg_d = start_reg_q;
-        input_base_d = input_base_q;
-    
-        user_mem_addr = '0;
-        user_mem_read_en = 1'b0;
-        user_mem_write_en = 1'b0;
-        user_mem_data_out = '0;
-    
-        valid_in = 1'b0;
-        pixel_in = '0;
-    
+
         if (req_q && we_q) begin
-            case(addr_q)
-                ADDR_INPUT_BASE: begin
-                    input_base_d = wdata_q;
-                    $display("[CNN_OBI] Write to INPUT_BASE: 0x%0h", wdata_q);
-                end
-                ADDR_CLASS_IDX: begin
-                    class_idx_d = wdata_q[3:0];
-                    $display("[CNN_OBI] Write to CLASS_IDX: %0d", wdata_q[3:0]);
-                end
-                ADDR_CTRL: begin
-                    start_reg_d = 1'b1;
-                    $display("[CNN_OBI] Write to CTRL: Start signal asserted");
+            case (addr_q)
+                ADDR_CTRL:      start_reg_d = 1'b1;
+                ADDR_CLASS_IDX: class_idx_d = wdata_q[3:0];
+                ADDR_PIXEL_IN: begin
+                    pixel_in = wdata_q[7:0];
+                    valid_in = 1'b1;
                 end
                 default: ;
             endcase
         end
-    
+    end
+
+    // FSM for processing
+    always_comb begin
+        state_d = state_q;
+        window_counter_d = window_counter_q;
+        class_scores_d = class_scores_q;
+        start_reg_d = start_reg_q;
+
+        done = 1'b0;
+        mgr_obi_req_o = '0; // Not used
+
         case (state_q)
-            IDLE: begin
-                if (start_reg_q) begin
-                    read_addr_d = input_base_q;
-                    $display("[CNN] Transition to READ state, starting from address: 0x%0h", input_base_q);
-                    state_d = READ;
-                end
-            end
-            READ: begin
-                user_mem_addr = read_addr_q;
-                user_mem_read_en = 1'b1;
-    
-                pixel_in = user_mem_data_in_q;
-                valid_in = mem_read_en_q;
-    
-                if (mem_read_en_q) begin
-                    read_addr_d = read_addr_q + 1;
-                    $display("[CNN] Reading pixel: 0x%0h from address: 0x%0h", user_mem_data_in_q, read_addr_q);
-                end
-    
-                if (valid_in) begin
-                    $display("[CNN] Pixel sent to line buffer: 0x%0h", pixel_in);
-                end
-    
-                if (window_valid) begin
-                    $display("[CNN] Window valid detected. Moving to PROCESS state.");
-                    state_d = PROCESS;
-                end
-            end
-            PROCESS: begin
-                if (relu_valid_out) begin
-                    $display("[CNN] PROCESS complete, moving to WRITE state.");
+            IDLE: if (start_reg_q) state_d = PROCESS;
+
+            PROCESS: if (window_valid && relu_valid_out) begin
+                class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
+                window_counter_d = window_counter_q + 1;
+
+                if (window_counter_q == TOTAL_WINDOWS - 1) begin
                     state_d = WRITE;
                 end
             end
+
             WRITE: begin
-                class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
-                user_mem_addr = CNN_CLASS_SCORES_BASE + (class_idx_q * 4);
-                user_mem_data_out = class_scores_d[class_idx_q];
-                user_mem_write_en = 1'b1;
-    
-                $display("[CNN] Writing updated score for class %0d: 0x%0h", class_idx_q, class_scores_d[class_idx_q]);
-    
-                state_d = IDLE;
+                mgr_obi_req_o.req = 1'b1;
+                mgr_obi_req_o.a.addr  = CNN_CLASS_SCORES_BASE + (class_idx_q * 4);
+                mgr_obi_req_o.a.we    = 1'b1;
+                mgr_obi_req_o.a.be    = 4'b1111;
+                mgr_obi_req_o.a.wdata = class_scores_d[class_idx_q];
+
+                done = 1'b1;
                 start_reg_d = 1'b0;
-                $display("[CNN] Returning to IDLE state.");
+                window_counter_d = 0;
+                state_d = IDLE;
             end
         endcase
     end
-    
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
-            mem_read_en_q <= 1'b0;
-            user_mem_data_in_q <= '0;
-        end else begin
-            mem_read_en_q <= user_mem_read_en;
-            if (user_mem_read_en) begin
-                user_mem_data_in_q <= user_mem_data_in;
-                $display("[CNN] Latched memory data: 0x%0h", user_mem_data_in);
-            end
-        end
-    end
-    
-    assign sbr_obi_rsp_o.r.rdata =
-        (addr_q == ADDR_INPUT_BASE) ? input_base_q :
-        (addr_q == ADDR_CLASS_IDX)  ? {{28'd0}, class_idx_q} :
-        (addr_q == ADDR_CTRL)       ? {{31'd0}, start_reg_q} :
-        (addr_q == (ADDR_CTRL + 32'h04)) ? {{31'd0}, done} :
-        32'd0;
 
+    assign sbr_obi_rsp_o.r.rdata =
+        (addr_q == ADDR_CLASS_IDX) ? {{28'd0}, class_idx_q} :
+        (addr_q == ADDR_CTRL)      ? {{31'd0}, start_reg_q} :
+        32'd0;
 
     assign sbr_obi_rsp_o.r.rid = '0;
     assign sbr_obi_rsp_o.r.err = 1'b0;
     assign sbr_obi_rsp_o.r.r_optional = '0;
     assign sbr_obi_rsp_o.rvalid = rvalid_q;
-
-    assign done = (state_q == IDLE);
 
 endmodule
