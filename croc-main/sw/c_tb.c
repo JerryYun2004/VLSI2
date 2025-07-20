@@ -46,12 +46,14 @@ int main() {
         // Set class index
         *reg32(CNN_BASE_ADDR, CNN_CLASS_IDX_REG) = class_idx;
 
-        // Inject all 28*28 = 784 pixels
         for (int i = 0; i < 784; i++) {
             uint8_t pixel = *((uint8_t*)(SRAM_BASE + IMAGE_OFFSET + i));
             *reg32(CNN_BASE_ADDR, CNN_PIXEL_IN_REG) = pixel;
+            if (i < 10) { // only print first few pixels to limit UART spam
+                printf("Pixel[%d] = %d\n", i, pixel);
+            }
         }
-
+        uart_write_flush();
         // Trigger processing
         *reg32(CNN_BASE_ADDR, CNN_CTRL_REG) = 1;
 
