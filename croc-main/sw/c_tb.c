@@ -8,8 +8,8 @@
 #define CNN_BASE_ADDR          0x20001000
 #define CNN_CTRL_REG           0x00
 #define CNN_STATUS_REG         0x04
-#define CNN_INPUT_BASE_REG     0x08
 #define CNN_CLASS_IDX_REG      0x14
+#define CNN_PIXEL_IN_REG       0x18
 #define CNN_CLASS_SCORES_BASE  0x20
 
 #define SRAM_BASE              0x10000000
@@ -35,21 +35,27 @@ int main() {
     uart_write_flush();
 
     uint32_t t0, t1, t2;
-
-    // Set input base address for CNN
-    *reg32(CNN_BASE_ADDR, CNN_INPUT_BASE_REG) = SRAM_BASE + IMAGE_OFFSET;
+    uint32_t* image_base = (uint32_t*)(SRAM_BASE + IMAGE_OFFSET);
 
     asm volatile("csrr %0, mcycle" : "=r"(t0)::"memory");
 
-    // Process all 10 classes
     for (int class_idx = 0; class_idx < 10; class_idx++) {
         printf("Processing for class index: %x\n", class_idx);
         uart_write_flush();
 
+        // Set class index
         *reg32(CNN_BASE_ADDR, CNN_CLASS_IDX_REG) = class_idx;
+
+        // Inject all 28*28 = 784 pixels
+        for (int i = 0; i < 784; i++) {
+            uint8_t pixel = *((uint8_t*)(SRAM_BASE + IMAGE_OFFSET + i));
+            *reg32(CNN_BASE_ADDR, CNN_PIXEL_IN_REG) = pixel;
+        }
+
+        // Trigger processing
         *reg32(CNN_BASE_ADDR, CNN_CTRL_REG) = 1;
 
-        // Wait for CNN to signal completion
+        // Wait for completion
         while (*reg32(CNN_BASE_ADDR, CNN_STATUS_REG) == 0);
 
         printf("Class %x: Processing completed.\n", class_idx);
