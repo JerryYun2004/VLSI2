@@ -185,7 +185,7 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .sbr_obi_rsp_o (cnn_sbr_obi_rsp),
   
     // Output control and memory datapath
-    .done               (cnn_done),
+    .done               (cnn_done)
     //.user_mem_data_in   (cnn_mem_data_in),
     //.user_mem_addr      (cnn_mem_addr),
     //.user_mem_read_en   (cnn_mem_read_en),
