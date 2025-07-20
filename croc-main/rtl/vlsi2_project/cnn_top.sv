@@ -177,12 +177,16 @@ module cnn_top #(
             READ: begin
                 user_mem_addr = read_addr_q;
                 user_mem_read_en = 1'b1;
-                read_addr_d = read_addr_q + 1;
             
                 pixel_in = user_mem_data_in_q;
                 valid_in = mem_read_en_q;
             
+                if (mem_read_en_q) begin
+                    read_addr_d = read_addr_q + 1;
+                end
+            
                 if (window_valid) begin
+                    $display("[CNN] Window valid detected at address: 0x%0h", read_addr_q);
                     state_d = PROCESS;
                 end
             end
