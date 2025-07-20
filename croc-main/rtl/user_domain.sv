@@ -186,11 +186,11 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   
     // Output control and memory datapath
     .done               (cnn_done),
-    .user_mem_data_in   (cnn_mem_data_in),
-    .user_mem_addr      (cnn_mem_addr),
-    .user_mem_read_en   (cnn_mem_read_en),
-    .user_mem_data_out  (cnn_mem_data_out),
-    .user_mem_write_en  (cnn_mem_write_en)
+    //.user_mem_data_in   (cnn_mem_data_in),
+    //.user_mem_addr      (cnn_mem_addr),
+    //.user_mem_read_en   (cnn_mem_read_en),
+    //.user_mem_data_out  (cnn_mem_data_out),
+    //.user_mem_write_en  (cnn_mem_write_en)
   );
 
 
