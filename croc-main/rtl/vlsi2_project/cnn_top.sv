@@ -56,8 +56,6 @@ module cnn_top #(
 
     logic [3:0] class_idx_q, class_idx_d;
 
-    logic [DATA_WIDTH-1:0] pixel_in;
-    logic valid_in;
     logic [DATA_WIDTH-1:0] window[0:8];
     logic window_valid;
     logic signed [31:0] conv_out, relu_out_data, pooled_out;
@@ -247,13 +245,88 @@ module cnn_top #(
         .ready_out(relu_ready_out)
     );
 
-    max_pool #(.DATA_WIDTH(32)) u_max_pool (
-        .pool_window('{relu_out_data, relu_out_data, relu_out_data, relu_out_data}),
-        .pool_out(pooled_out)
+    max_pool2x2_streaming #(
+      .DATA_WIDTH(32),
+      .WIDTH      (FEATURE_MAP_WIDTH)   // e.g., 28 after ReLU if padding kept
+    ) u_maxpool2x2 (
+      .clk       (clk_i),
+      .rst_n     (rst_ni),
+    
+      .in_data   (relu_out_data),
+      .valid_in  (relu_valid_out),
+      .ready_out (relu_ready_in),       // back-pressure to ReLU
+    
+      .out_data  (pool_out_data),
+      .valid_out (pool_valid_out),
+      .ready_in  (pool_ready_in)        // from your downstream (e.g., writer)
     );
+
 
     assign relu_valid_in = window_valid && relu_ready_in;
 
+    // After your ReLU and MaxPool:
+    logic [DATA_W-1:0] pool_data;
+    logic              pool_v, pool_rdy;
+    
+    // GAP+FC head
+    logic [DATA_W-1:0] score_data;
+    logic              score_v, score_rdy, head_done;
+    
+    gap_fc_head_streaming #(
+      .DATA_W (32),
+      .K      (10),
+      .SCALE_Q(16)
+    ) u_head (
+      .clk        (clk_i),
+      .rst_n      (rst_ni),
+      .start      (start_head),        // pulse when first pooled pixel of image arrives
+      .npix       (npix_value),        // (WIDTH/2)*(HEIGHT/2)
+    
+      .in_data    (pool_data),
+      .valid_in   (pool_v),
+      .ready_out  (pool_rdy),
+    
+      .w_we       (fc_w_we), .w_waddr(fc_w_addr), .w_wdata(fc_w_data),
+      .b_we       (fc_b_we), .b_waddr(fc_b_addr), .b_wdata(fc_b_data),
+      .scale_we   (gap_scale_we), .scale_wdata(gap_scale_data),
+    
+      .score_out  (score_data),
+      .score_valid(score_v),
+      .score_ready(score_rdy),
+    
+      .done       (head_done)
+    );
+    
+    // Back-pressure from head to MaxPool
+    assign pool_ready_in = pool_rdy;
+    
+    // Score writer to SRAM
+    logic wr_done;
+    score_writer_stream #(
+      .DATA_W(32), .ADDR_W(32), .K(10)
+    ) u_writer (
+      .clk       (clk_i),
+      .rst_n     (rst_ni),
+      .start     (start_writer),      // assert with/after first score expected; simplest: tie to 'score_v' rising edge with a 1-cycle pulse or to start_head delayed
+      .dst_base  (scores_dst_base),
+    
+      .in_data   (score_data),
+      .valid_in  (score_v),
+      .ready_out (score_rdy),
+    
+      .wr_valid  (mem_wr_valid),
+      .wr_ready  (mem_wr_ready),
+      .wr_addr   (mem_wr_addr),
+      .wr_data   (mem_wr_data),
+    
+      .done      (wr_done)
+    );
+    
+    // FSM: assert start_head with first pooled pixel of each inference,
+    // wait for 'wr_done' then raise STATUS.done.
+
+
+    
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             state <= IDLE;
