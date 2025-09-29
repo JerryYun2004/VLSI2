@@ -44,6 +44,10 @@ module cnn_top #(
     logic rvalid;
     logic user_mem_write_en_q;
 
+    logic [DATA_WIDTH-1:0] pixel_in_q;
+    logic                  pixel_valid_q;
+
+
     logic [ADDR_WIDTH-1:0] input_base_q, input_base_d;
     logic start_reg_q, start_reg_d;
     logic status_reg;
@@ -184,6 +188,18 @@ module cnn_top #(
         end
     end
 
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        pixel_in_q    <= '0;
+        pixel_valid_q <= 1'b0;
+      end else begin
+        pixel_valid_q <= user_mem_read_en;          // valid is the previous cycle's read_en
+        if (user_mem_read_en)
+          pixel_in_q <= user_mem_data_in;           // capture the returned data
+      end
+    end
+
+    
     assign handshake_done = sbr_obi_req_i.req && sbr_obi_rsp_o.gnt && sbr_obi_rsp_o.rvalid;
     assign obi_busy       = pending_read_q; // CNN is processing when not in IDLE
     assign write_enable   = sbr_obi_req_i.req && sbr_obi_req_i.a.we && !write_in_progress_q && sbr_obi_rsp_o.gnt;
@@ -205,13 +221,14 @@ module cnn_top #(
     assign mgr_obi_req_o.a.aid = '0;
 
     line_buffer #(.DATA_WIDTH(DATA_WIDTH), .WIDTH(28)) u_line_buffer (
-        .clk(clk_i),
-        .rst_n(rst_ni),
-        .pixel_in(pixel_in),
-        .valid_in(valid_in),
-        .window(window),
-        .window_valid(window_valid)
+      .clk         (clk_i),
+      .rst_n       (rst_ni),
+      .pixel_in    (pixel_in_q),
+      .valid_in    (pixel_valid_q),
+      .window      (window),
+      .window_valid(window_valid)
     );
+
 
     conv #(.DATA_WIDTH(DATA_WIDTH), .ACC_WIDTH(32)) u_conv (
         .window(window),
@@ -235,9 +252,7 @@ module cnn_top #(
         .pool_out(pooled_out)
     );
 
-    assign relu_valid_in = window_valid;
-    assign relu_ready_out = 1'b1;
-    assign relu_ready_in = 1'b1;
+    assign relu_valid_in = window_valid && relu_ready_in;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -292,11 +307,9 @@ module cnn_top #(
     state_t state, next_state;
     always_comb begin
         next_state = state;
-        valid_in = 0;
         user_mem_read_en = 0;
         user_mem_write_en = 0;
         user_mem_addr = 0;
-        pixel_in = 0;
         user_mem_data_out = '0;
         read_addr_d = read_addr_q;
         class_scores_d = class_scores_q;
@@ -316,8 +329,6 @@ module cnn_top #(
                 $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
                 user_mem_addr = read_addr_q;
                 user_mem_read_en = 1;
-                pixel_in = user_mem_data_in;
-                valid_in = 1;
                 read_addr_d = read_addr_q + 1;
     
                 if (window_valid) begin
