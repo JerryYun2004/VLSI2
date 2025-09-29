@@ -192,6 +192,7 @@ module gap_fc_head_streaming #(
     assign score_out   = score_hold;
     assign score_valid = score_hold_valid;
 
-    // Done when last score accepted
-    assign done = (state_q == IDLE) && (state_d == IDLE) && !score_hold_valid; // 1-cycle after last accept
+    // Done when the last score is accepted by downstream
+    assign done = (state_q == EMIT) && (k_idx_q == K-1) && score_hold_valid && score_ready;
+
 endmodule
