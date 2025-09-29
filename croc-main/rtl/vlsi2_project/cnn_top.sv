@@ -58,12 +58,45 @@ module cnn_top #(
 
     logic [DATA_WIDTH-1:0] window[0:8];
     logic window_valid;
-    logic signed [31:0] conv_out, relu_out_data, pooled_out;
+    logic signed [31:0] conv_out, relu_out_data;
     logic relu_valid_in, relu_ready_in;
     logic relu_valid_out, relu_ready_out;
 
     logic [ADDR_WIDTH-1:0] read_addr;
+
+    // --- Streaming pool + head/writer wiring ---
+    localparam int FEATURE_MAP_WIDTH = 28;
+    localparam int NPIX = (FEATURE_MAP_WIDTH*FEATURE_MAP_WIDTH)/4;
     
+    logic [31:0] pool_out_data;
+    logic        pool_valid_out;
+    logic        pool_ready_in;
+    
+    logic [31:0] pool_data;
+    logic        pool_v;
+    logic        pool_rdy;
+    
+    logic [31:0] score_data;
+    logic        score_v, score_rdy;
+    logic        head_done;
+    
+    logic [31:0] npix_value;
+    assign npix_value = NPIX;
+    
+    logic        head_started_q, writer_started_q;
+    logic        head_start_pulse, writer_start_pulse;
+    
+    logic        mem_wr_valid, mem_wr_ready;
+    logic [31:0] mem_wr_addr, mem_wr_data;
+    logic        writer_done;
+    logic [ADDR_WIDTH-1:0] scores_dst_base;
+    assign scores_dst_base = CNN_CLASS_SCORES_BASE;
+    
+    // FC/GAP CSR strobes (decoded in CSR block)
+    logic               fc_w_we, fc_b_we, gap_scale_we;
+    logic [$clog2(10)-1:0] fc_w_addr, fc_b_addr;
+    logic [31:0]        fc_w_data, fc_b_data, gap_scale_data;
+
     `FF(req_q, req_d, '0)
     `FF(we_q, we_d, '0)
     `FF(addr_q, addr_d, '0)
@@ -87,6 +120,11 @@ module cnn_top #(
 
     localparam ADDR_CLASS_SCORES = 32'h20001020;
 
+    // FC head programming window
+    localparam ADDR_FC_W_BASE = 32'h20001200; // 10 weights
+    localparam ADDR_FC_B_BASE = 32'h20001240; // 10 biases
+    localparam ADDR_GAP_SCALE = 32'h20001280; // fixed-point reciprocal
+    
     logic start_reg_set; // Declare this at module scope
     logic write_enable;
     
@@ -119,19 +157,44 @@ module cnn_top #(
         class_scores_d       = class_scores_q;
         weight_write_count_d = weight_write_count_q;
         weights_loaded_summary_d = weights_loaded_summary_q;
-    
+
+        // Defaults for FC/GAP CSR strobes
+        fc_w_we        = 1'b0;
+        fc_b_we        = 1'b0;
+        gap_scale_we   = 1'b0;
+        fc_w_addr      = '0;
+        fc_b_addr      = '0;
+        fc_w_data      = '0;
+        fc_b_data      = '0;
+        gap_scale_data = '0';
+
         if (sbr_obi_req_i.req && !obi_busy) begin
             if (write_enable) begin
                 if (sbr_obi_req_i.a.addr >= ADDR_WEIGHT_BASE && sbr_obi_req_i.a.addr < ADDR_WEIGHT_BASE + 9*4) begin
+                    // 3x3 conv weights
                     weights_reg[(sbr_obi_req_i.a.addr - ADDR_WEIGHT_BASE) >> 2] = sbr_obi_req_i.a.wdata[DATA_WIDTH-1:0];
                     weight_write_count_d = weight_write_count_q + 1;
+                end else if (sbr_obi_req_i.a.addr >= ADDR_FC_W_BASE && sbr_obi_req_i.a.addr < ADDR_FC_W_BASE + 10*4) begin
+                    // FC weights (K=10)
+                    fc_w_we   = 1'b1;
+                    fc_w_addr = (sbr_obi_req_i.a.addr - ADDR_FC_W_BASE) >> 2;
+                    fc_w_data = sbr_obi_req_i.a.wdata;
+                end else if (sbr_obi_req_i.a.addr >= ADDR_FC_B_BASE && sbr_obi_req_i.a.addr < ADDR_FC_B_BASE + 10*4) begin
+                    // FC biases (K=10)
+                    fc_b_we   = 1'b1;
+                    fc_b_addr = (sbr_obi_req_i.a.addr - ADDR_FC_B_BASE) >> 2;
+                    fc_b_data = sbr_obi_req_i.a.wdata;
                 end else unique case (sbr_obi_req_i.a.addr)
-                    ADDR_CTRL:     start_reg_set = 1'b1;
-                    ADDR_INPUT_BASE: input_base_d = sbr_obi_req_i.a.wdata;
-                    ADDR_CLASS_IDX:  class_idx_d  = sbr_obi_req_i.a.wdata[3:0];
+                    ADDR_GAP_SCALE: begin
+                        gap_scale_we   = 1'b1;
+                        gap_scale_data = sbr_obi_req_i.a.wdata;
+                    end
+                    ADDR_CTRL:       start_reg_set = 1'b1;
+                    ADDR_INPUT_BASE: input_base_d  = sbr_obi_req_i.a.wdata;
+                    ADDR_CLASS_IDX:  class_idx_d   = sbr_obi_req_i.a.wdata[3:0];
                     default: rsp_err_d = 1'b1;
                 endcase
-    
+            
                 write_in_progress_d = 1'b1;
             end else if (sbr_obi_req_i.a.we && write_in_progress_q) begin
                 // Skip repeated write attempts
@@ -245,33 +308,29 @@ module cnn_top #(
         .ready_out(relu_ready_out)
     );
 
+    // Streaming 2x2 MaxPool (stride=2)
     max_pool2x2_streaming #(
       .DATA_WIDTH(32),
-      .WIDTH      (FEATURE_MAP_WIDTH)   // e.g., 28 after ReLU if padding kept
+      .WIDTH     (FEATURE_MAP_WIDTH)
     ) u_maxpool2x2 (
       .clk       (clk_i),
       .rst_n     (rst_ni),
-    
       .in_data   (relu_out_data),
       .valid_in  (relu_valid_out),
-      .ready_out (relu_ready_in),       // back-pressure to ReLU
-    
+      .ready_out (relu_ready_in),   // back-pressure to ReLU
       .out_data  (pool_out_data),
       .valid_out (pool_valid_out),
-      .ready_in  (pool_ready_in)        // from your downstream (e.g., writer)
+      .ready_in  (pool_ready_in)
     );
-
-
+    
+    // Drive ReLU's input valid when both the window is valid and downstream is ready
     assign relu_valid_in = window_valid && relu_ready_in;
-
-    // After your ReLU and MaxPool:
-    logic [DATA_W-1:0] pool_data;
-    logic              pool_v, pool_rdy;
     
-    // GAP+FC head
-    logic [DATA_W-1:0] score_data;
-    logic              score_v, score_rdy, head_done;
+    // Map pool stream to head
+    assign pool_data = pool_out_data;
+    assign pool_v    = pool_valid_out;
     
+    // GAP + FC head (emits 10 scores)
     gap_fc_head_streaming #(
       .DATA_W (32),
       .K      (10),
@@ -279,51 +338,65 @@ module cnn_top #(
     ) u_head (
       .clk        (clk_i),
       .rst_n      (rst_ni),
-      .start      (start_head),        // pulse when first pooled pixel of image arrives
-      .npix       (npix_value),        // (WIDTH/2)*(HEIGHT/2)
-    
+      .start      (head_start_pulse),   // pulse on first pooled pixel
+      .npix       (npix_value),
       .in_data    (pool_data),
       .valid_in   (pool_v),
       .ready_out  (pool_rdy),
-    
-      .w_we       (fc_w_we), .w_waddr(fc_w_addr), .w_wdata(fc_w_data),
-      .b_we       (fc_b_we), .b_waddr(fc_b_addr), .b_wdata(fc_b_data),
-      .scale_we   (gap_scale_we), .scale_wdata(gap_scale_data),
-    
+      .w_we       (fc_w_we),    .w_waddr(fc_w_addr), .w_wdata(fc_w_data),
+      .b_we       (fc_b_we),    .b_waddr(fc_b_addr), .b_wdata(fc_b_data),
+      .scale_we   (gap_scale_we),       .scale_wdata(gap_scale_data),
       .score_out  (score_data),
       .score_valid(score_v),
       .score_ready(score_rdy),
-    
       .done       (head_done)
     );
     
     // Back-pressure from head to MaxPool
     assign pool_ready_in = pool_rdy;
     
-    // Score writer to SRAM
-    logic wr_done;
+    // Score writer to SRAM (testbench path: map to user_mem_*)
     score_writer_stream #(
       .DATA_W(32), .ADDR_W(32), .K(10)
     ) u_writer (
       .clk       (clk_i),
       .rst_n     (rst_ni),
-      .start     (start_writer),      // assert with/after first score expected; simplest: tie to 'score_v' rising edge with a 1-cycle pulse or to start_head delayed
+      .start     (writer_start_pulse),
       .dst_base  (scores_dst_base),
-    
       .in_data   (score_data),
       .valid_in  (score_v),
       .ready_out (score_rdy),
-    
       .wr_valid  (mem_wr_valid),
       .wr_ready  (mem_wr_ready),
       .wr_addr   (mem_wr_addr),
       .wr_data   (mem_wr_data),
-    
-      .done      (wr_done)
+      .done      (writer_done)
     );
     
-    // FSM: assert start_head with first pooled pixel of each inference,
-    // wait for 'wr_done' then raise STATUS.done.
+    // Testbench memory is always ready for writes
+    assign mem_wr_ready = 1'b1;
+    
+    // Trigger pulses on first valid of stream
+    assign head_start_pulse   = pool_valid_out & ~head_started_q;
+    assign writer_start_pulse = score_v        & ~writer_started_q;
+
+    // Track first-valid events to make one-cycle start pulses
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            head_started_q   <= 1'b0;
+            writer_started_q <= 1'b0;
+        end else begin
+            if (state == IDLE && start_reg_set) begin
+                head_started_q   <= 1'b0;
+                writer_started_q <= 1'b0;
+            end else begin
+                if (!head_started_q && pool_valid_out)
+                    head_started_q <= 1'b1;
+                if (!writer_started_q && score_v)
+                    writer_started_q <= 1'b1;
+            end
+        end
+    end
 
 
     
@@ -379,58 +452,50 @@ module cnn_top #(
     typedef enum logic [1:0] {IDLE, READ, PROCESS, WRITE} state_t;
     state_t state, next_state;
     always_comb begin
-        next_state = state;
-        user_mem_read_en = 0;
-        user_mem_write_en = 0;
-        user_mem_addr = 0;
+        next_state        = state;
+        user_mem_read_en  = 1'b0;
+        user_mem_write_en = 1'b0;
+        user_mem_addr     = '0;
         user_mem_data_out = '0;
-        read_addr_d = read_addr_q;
-        class_scores_d = class_scores_q;
-        start_reg_d = start_reg_q; // default retain
+        read_addr_d       = read_addr_q;
+        class_scores_d    = class_scores_q;
+        start_reg_d       = start_reg_q; // default retain
+    
+        // Default: no CSR error
+        // (rsp_err_d handled above)
     
         case (state)
             IDLE: begin
                 if (start_reg_set) begin
-                    $display("[CNN] FSM start: Moving to READ");
+                    $display("[CNN] FSM start -> READ");
                     read_addr_d = input_base_q;
-                    next_state = READ;
+                    next_state  = READ;
                     start_reg_d = 1'b1;  // latch start trigger
                 end
             end
     
             READ: begin
-                $display("[CNN] READ: read_addr_q=0x%0h, pixel_in=0x%0h", read_addr_q, pixel_in);
-                user_mem_addr = read_addr_q;
-                user_mem_read_en = 1;
-                read_addr_d = read_addr_q + 1;
-    
-                if (window_valid) begin
-                    $display("[CNN] Window Valid! read_addr=0x%0h", read_addr_q);
-                    $display("[CNN] Convolution output: conv_out=%0d", conv_out);
-                    next_state = PROCESS;
+                // Writer wins the memory bus if emitting scores
+                if (mem_wr_valid) begin
+                    user_mem_addr     = mem_wr_addr;
+                    user_mem_data_out = mem_wr_data;
+                    user_mem_write_en = 1'b1;
+                end else begin
+                    // Pull next pixel only when pipeline can accept it
+                    logic pipeline_can_pull;
+                    pipeline_can_pull = (window_valid == 1'b0) || (relu_ready_in == 1'b1);
+                    if (pipeline_can_pull) begin
+                        user_mem_addr    = read_addr_q;
+                        user_mem_read_en = 1'b1;
+                        read_addr_d      = read_addr_q + 1;
+                    end
                 end
-            end
     
-            PROCESS: begin
-                if (relu_valid_out) begin
-                    $display("[CNN] ReLU Output: relu_out_data=%0d", relu_out_data);
-                    next_state = WRITE;
+                // Done when writer finishes emitting K scores
+                if (writer_done) begin
+                    next_state  = IDLE;
+                    start_reg_d = 1'b0; // clear start flag
                 end
-            end
-    
-            WRITE: begin
-                $display("[CNN] Pooled Output: pooled_out=%0d", pooled_out);
-                $display("[CNN] WRITE: class_idx=%0d, score=%0d", class_idx_q, pooled_out);
-    
-                class_scores_d[class_idx_q] = class_scores_q[class_idx_q] + pooled_out;
-                $display("[CNN] Accumulated class_scores[%0d] = %0d", class_idx_q, class_scores_d[class_idx_q]);
-    
-                user_mem_addr = 32'h20001020 + (class_idx_q << 2);
-                user_mem_data_out = class_scores_d[class_idx_q];
-                user_mem_write_en = 1; // one-cycle pulse asserted here
-    
-                next_state = IDLE; // directly return to IDLE
-                start_reg_d = 1'b0; // clear start flag
             end
         endcase
     end
@@ -439,14 +504,15 @@ module cnn_top #(
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
             status_reg <= 1'b0;
-        end else if (state == WRITE) begin
+        end else if (writer_done) begin
             status_reg <= 1'b1;
-            $display("[CNN] status_reg set to 1 at WRITE");
-        end else if (req_q && we_q && addr_q == ADDR_CTRL) begin
+            $display("[CNN] status_reg=1 (writer_done)");
+        end else if (state == IDLE && start_reg_set) begin
             status_reg <= 1'b0;
         end
     end
-
+    
     assign done = status_reg;
+
 
 endmodule
